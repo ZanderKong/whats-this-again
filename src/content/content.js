@@ -84,21 +84,21 @@
       <style>
         :host {
           color-scheme: light;
-          --iai-panel-x: 14px;
-          --iai-ink: #171717;
-          --iai-muted: #68635c;
-          --iai-line: rgba(23, 23, 23, 0.13);
-          --iai-paper: #fffdf7;
-          --iai-wash: #f7f1e6;
-          --iai-accent: #087f7b;
-          --iai-accent-strong: #914a20;
-          --iai-accent-rgb: 201, 130, 87;
-          --iai-accent-soft: rgba(201, 130, 87, 0.22);
-          --iai-orange: #c98257;
-          --iai-blue: #cfe8ff;
+          --iai-panel-x: 16px;
+          --iai-ink: #1f2937;
+          --iai-muted: #667085;
+          --iai-line: rgba(31, 41, 55, 0.12);
+          --iai-paper: #ffffff;
+          --iai-wash: #f6f8fb;
+          --iai-accent: #2563eb;
+          --iai-accent-strong: #1d4ed8;
+          --iai-accent-rgb: 37, 99, 235;
+          --iai-accent-soft: rgba(37, 99, 235, 0.14);
+          --iai-orange: #f97316;
+          --iai-blue: #dbeafe;
           --iai-warn: #b42318;
-          --iai-shadow: 0 20px 60px rgba(17, 24, 39, 0.22), 0 3px 12px rgba(17, 24, 39, 0.12);
-          font-family: ui-serif, "Songti SC", "Noto Serif CJK SC", Georgia, serif;
+          --iai-shadow: 0 20px 56px rgba(15, 23, 42, 0.16), 0 3px 12px rgba(15, 23, 42, 0.1);
+          font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
         }
         * { box-sizing: border-box; }
         .hidden { display: none !important; }
@@ -158,10 +158,10 @@
           min-width: min(320px, calc(100vw - 24px));
           min-height: 120px;
           max-height: min(680px, calc(100vh - 24px));
-          border: 1px solid rgba(var(--iai-accent-rgb), 0.28);
+          border: 1px solid var(--iai-line);
           border-radius: 8px;
-          background: linear-gradient(180deg, #fffdf7 0%, #f7f1e6 100%);
-          background-color: #fffdf7;
+          background: linear-gradient(180deg, #ffffff 0%, var(--iai-wash) 100%);
+          background-color: var(--iai-paper);
           box-shadow: var(--iai-shadow);
           overflow: hidden;
           pointer-events: auto;
@@ -182,9 +182,9 @@
           grid-template-columns: 1fr auto;
           gap: 8px;
           align-items: center;
-          border-bottom: 1px solid rgba(var(--iai-accent-rgb), 0.18);
-          min-height: 38px;
-          padding: 6px var(--iai-panel-x);
+          border-bottom: 1px solid var(--iai-line);
+          min-height: 44px;
+          padding: 8px var(--iai-panel-x);
           cursor: grab;
           user-select: none;
         }
@@ -199,7 +199,7 @@
           max-width: min(430px, calc(100vw - 112px));
           margin: 0;
           color: var(--iai-ink);
-          font: 700 15px/1.2 ui-serif, "Songti SC", Georgia, serif;
+          font: 650 16px/1.3 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
           letter-spacing: 0;
           overflow: hidden;
           text-overflow: ellipsis;
@@ -217,22 +217,23 @@
           gap: 12px;
           max-height: calc(min(680px, 100vh - 24px) - 56px);
           overflow: auto;
-          padding: 12px var(--iai-panel-x) 14px;
+          padding: 14px var(--iai-panel-x) 16px;
         }
         .button,
         .icon-button,
         .scope-select {
-          border: 1px solid rgba(23, 23, 23, 0.16);
+          border: 1px solid rgba(31, 41, 55, 0.14);
           border-radius: 8px;
-          background: rgba(255, 255, 255, 0.68);
+          background: rgba(255, 255, 255, 0.84);
           color: var(--iai-ink);
           cursor: pointer;
-          font: 800 13px/1 ui-sans-serif, system-ui, sans-serif;
+          font: 650 13px/1 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
           letter-spacing: 0;
+          transition: background 140ms ease, border-color 140ms ease, box-shadow 140ms ease, color 140ms ease, transform 140ms ease;
         }
         .button {
           min-height: 34px;
-          padding: 8px 11px;
+          padding: 8px 12px;
         }
         .button.primary {
           border-color: rgba(var(--iai-accent-rgb), 0.34);
@@ -245,18 +246,23 @@
         .icon-button:hover,
         .icon-button:focus-visible {
           outline: none;
-          box-shadow: 0 6px 18px rgba(23, 23, 23, 0.12);
+          border-color: rgba(var(--iai-accent-rgb), 0.28);
+          box-shadow: 0 8px 20px rgba(15, 23, 42, 0.12);
           transform: translateY(-1px);
+        }
+        .button.primary:hover,
+        .button.primary:focus-visible {
+          background: var(--iai-accent-strong);
         }
         .icon-button {
           display: grid;
           place-items: center;
-          width: 24px;
-          height: 24px;
+          width: 28px;
+          height: 28px;
           border-color: transparent;
           background: transparent;
           color: var(--iai-muted);
-          font-size: 18px;
+          font-size: 20px;
           line-height: 1;
         }
         .scope-select {
@@ -265,45 +271,53 @@
         }
         .prompt-composer {
           display: grid;
-          grid-template-columns: 1fr 34px;
-          gap: 8px;
+          grid-template-columns: minmax(0, 1fr) 36px;
+          gap: 10px;
           align-items: center;
-          border: 1px solid var(--iai-accent-soft);
+          border: 1px solid rgba(31, 41, 55, 0.14);
           border-radius: 8px;
-          min-height: 46px;
-          padding: 6px 7px 6px 0;
-          background: #fffaf0;
+          min-height: 50px;
+          padding: 6px 8px 6px 14px;
+          background: var(--iai-paper);
+          box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04);
+        }
+        .prompt-composer:focus-within {
+          border-color: rgba(var(--iai-accent-rgb), 0.46);
+          box-shadow: 0 0 0 3px var(--iai-accent-soft), inset 0 1px 2px rgba(15, 23, 42, 0.04);
         }
         .prompt-composer.compact textarea {
-          min-height: 20px;
+          min-height: 24px;
         }
         textarea {
           width: 100%;
-          min-height: 20px;
+          min-height: 24px;
           max-height: 60px;
           resize: none;
           overflow: auto;
           border: 0;
           border-radius: 0;
-          padding: 0;
+          padding: 4px 0;
           background: transparent;
           color: var(--iai-ink);
-          font: 14px/20px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+          font: 14px/1.45 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
           letter-spacing: 0;
+        }
+        textarea::placeholder {
+          color: #8a94a6;
         }
         textarea:focus { outline: none; }
         .send-round {
           display: grid;
           place-items: center;
-          width: 34px;
-          height: 34px;
-          min-height: 34px;
+          width: 36px;
+          height: 36px;
+          min-height: 36px;
           border-radius: 50%;
           padding: 0;
-          border-color: var(--iai-accent-soft);
+          border-color: rgba(var(--iai-accent-rgb), 0.28);
           background: var(--iai-accent);
-          color: #fffdf7;
-          font: 900 18px/1 ui-sans-serif, system-ui, sans-serif;
+          color: white;
+          font: 800 17px/1 ui-sans-serif, system-ui, sans-serif;
         }
         .answer-card-list {
           display: grid;
@@ -329,7 +343,7 @@
         .answer-card h3 {
           margin: 0;
           color: var(--iai-accent-strong);
-          font: 800 14px/1.25 ui-sans-serif, system-ui, sans-serif;
+          font: 650 13px/1.45 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
         }
         .card-actions {
           display: flex;
@@ -355,12 +369,12 @@
           transform: none;
         }
         .response {
-          border: 1px solid rgba(122, 101, 86, 0.24);
+          border: 1px solid var(--iai-line);
           border-radius: 8px;
-          padding: 12px 0;
-          background: linear-gradient(180deg, #fffdfa, #fff8ef);
+          padding: 12px;
+          background: #ffffff;
           color: var(--iai-ink);
-          font: 14px/1.65 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+          font: 14px/1.7 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
           letter-spacing: 0;
           overflow-wrap: anywhere;
         }
@@ -383,7 +397,7 @@
           grid-column: 1;
           margin: 0;
           color: var(--iai-accent-strong);
-          font: 800 13px/1.25 ui-sans-serif, system-ui, sans-serif;
+          font: 650 13px/1.45 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
           letter-spacing: 0;
         }
         .thread-message .response {
@@ -404,7 +418,7 @@
           display: grid;
           gap: 6px;
           min-width: 176px;
-          border: 1px solid rgba(122, 101, 86, 0.22);
+          border: 1px solid var(--iai-line);
           border-radius: 8px;
           padding: 8px;
           background: var(--iai-paper);
@@ -430,15 +444,15 @@
           overflow: auto;
           border-radius: 8px;
           padding: 9px;
-          background: #1f2937;
+          background: #111827;
           color: #f9fafb;
         }
         .notice {
           border-left: 3px solid var(--iai-accent);
-          padding: 8px 0 8px 10px;
+          padding: 8px 10px;
           background: rgba(var(--iai-accent-rgb), 0.08);
           color: var(--iai-muted);
-          font: 13px/1.45 ui-sans-serif, system-ui, sans-serif;
+          font: 13px/1.45 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
         }
         .error {
           border-left-color: var(--iai-warn);
@@ -466,7 +480,7 @@
           background: var(--iai-paper);
           box-shadow: 0 12px 32px rgba(23, 23, 23, 0.18);
           color: var(--iai-ink);
-          font: 13px/1.35 ui-sans-serif, system-ui, sans-serif;
+          font: 13px/1.35 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
           pointer-events: none;
         }
         #history-hint-line {
@@ -486,12 +500,12 @@
           border: 1px solid rgba(var(--iai-accent-rgb), 0.26);
           border-radius: 999px;
           padding: 5px 9px;
-          background: #fffdf7;
+          background: var(--iai-paper);
           color: var(--iai-ink);
           box-shadow: 0 10px 26px rgba(23, 23, 23, 0.14);
           cursor: pointer;
           pointer-events: auto;
-          font: 800 12px/1.2 ui-sans-serif, system-ui, sans-serif;
+          font: 650 12px/1.2 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
           letter-spacing: 0;
         }
         #history-hint::before {

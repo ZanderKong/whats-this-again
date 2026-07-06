@@ -19,6 +19,7 @@ const include = [
   "CONTRIBUTING.md",
   "SECURITY.md",
   "assets",
+  "docs",
   "src",
   "tools",
   "package.json"

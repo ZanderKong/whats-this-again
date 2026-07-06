@@ -1,18 +1,17 @@
 :root {
   color-scheme: light;
-  --ink: #171717;
-  --coal: #20201d;
-  --muted: #66645e;
-  --paper: #fffdf7;
-  --wash: #f5f1e7;
-  --line: rgba(23, 23, 23, 0.13);
-  --accent: #c98257;
-  --accent-strong: #914a20;
-  --accent-soft: rgba(201, 130, 87, 0.16);
-  --accent-line: rgba(201, 130, 87, 0.32);
-  --gold: #e7b339;
+  --ink: #1f2937;
+  --muted: #667085;
+  --paper: #ffffff;
+  --wash: #f6f8fb;
+  --line: rgba(31, 41, 55, 0.12);
+  --accent: #2563eb;
+  --accent-strong: #1d4ed8;
+  --accent-soft: rgba(37, 99, 235, 0.14);
+  --accent-line: rgba(37, 99, 235, 0.3);
+  --orange: #f97316;
   --danger: #b42318;
-  font-family: ui-serif, "Songti SC", "Noto Serif CJK SC", Georgia, serif;
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
 }
 
 * {
@@ -23,8 +22,9 @@ body {
   width: 342px;
   margin: 0;
   background:
-    linear-gradient(135deg, var(--accent-soft), transparent 38%),
-    linear-gradient(180deg, #fffdf7 0%, #f5f1e7 100%);
+    radial-gradient(circle at 12% 8%, rgba(37, 99, 235, 0.12), transparent 34%),
+    radial-gradient(circle at 88% 20%, rgba(249, 115, 22, 0.12), transparent 28%),
+    linear-gradient(180deg, #ffffff 0%, var(--wash) 100%);
   color: var(--ink);
 }
 
@@ -45,11 +45,11 @@ body {
   display: block;
   width: 42px;
   height: 42px;
-  border: 1px solid rgba(255, 253, 247, 0.18);
-  border-radius: 8px;
-  background: var(--paper);
-  object-fit: cover;
-  box-shadow: 0 10px 24px rgba(23, 23, 23, 0.2);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  object-fit: contain;
+  box-shadow: none;
 }
 
 h1,
@@ -58,15 +58,16 @@ p {
 }
 
 h1 {
-  font-size: 22px;
-  line-height: 1;
+  font-size: 21px;
+  font-weight: 700;
+  line-height: 1.1;
   letter-spacing: 0;
 }
 
 #host {
   margin-top: 4px;
   color: var(--muted);
-  font: 12px/1.35 ui-sans-serif, system-ui, sans-serif;
+  font: 12px/1.35 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
   overflow-wrap: anywhere;
 }
 
@@ -74,9 +75,9 @@ h1 {
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 9px 10px;
-  background: rgba(255, 255, 255, 0.62);
+  background: rgba(255, 255, 255, 0.78);
   color: var(--muted);
-  font: 13px/1.4 ui-sans-serif, system-ui, sans-serif;
+  font: 13px/1.45 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
 }
 
 .status.ok {
@@ -102,19 +103,22 @@ h1 {
 
 .button {
   min-height: 38px;
-  border: 1px solid rgba(23, 23, 23, 0.16);
+  border: 1px solid rgba(31, 41, 55, 0.14);
   border-radius: 8px;
   padding: 9px 11px;
-  background: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.84);
   color: var(--ink);
   cursor: pointer;
-  font: 800 13px/1 ui-sans-serif, system-ui, sans-serif;
+  font: 650 13px/1 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
   letter-spacing: 0;
+  transition: background 140ms ease, border-color 140ms ease, box-shadow 140ms ease, color 140ms ease, transform 140ms ease;
 }
 
 .button:hover,
 .button:focus-visible {
-  outline: 3px solid var(--accent-soft);
+  outline: none;
+  border-color: rgba(37, 99, 235, 0.28);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.12);
   transform: translateY(-1px);
 }
 
@@ -124,15 +128,20 @@ h1 {
   color: white;
 }
 
+.button.primary:hover,
+.button.primary:focus-visible {
+  background: var(--accent-strong);
+}
+
 .color-panel {
   display: grid;
   gap: 8px;
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 10px;
-  background: rgba(255, 255, 255, 0.58);
+  background: rgba(255, 255, 255, 0.72);
   color: var(--muted);
-  font: 800 12px/1 ui-sans-serif, system-ui, sans-serif;
+  font: 650 12px/1 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
 }
 
 .swatches {
@@ -165,5 +174,5 @@ h1 {
   justify-content: space-between;
   gap: 8px;
   color: var(--muted);
-  font: 12px/1.2 ui-sans-serif, system-ui, sans-serif;
+  font: 12px/1.2 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
 }

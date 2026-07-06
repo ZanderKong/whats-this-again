@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>这是啥来着 - 上下文 AI 阅读解释插件</title>
+    <meta
+      name="description"
+      content="这是啥来着是一款 Chrome 插件，用于在技术阅读、论文阅读和英文资料浏览中快速解释陌生概念，并把有价值的回答保存为本地阅读记忆。"
+    >
+    <link rel="icon" href="./assets/icon128.png">
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="#top" aria-label="这是啥来着首页">
+        <img src="./assets/icon128.png" alt="" aria-hidden="true">
+        <span>这是啥来着</span>
+      </a>
+      <nav aria-label="页面导航">
+        <a href="#workflow">使用流程</a>
+        <a href="#scenarios">适用场景</a>
+        <a href="#privacy">隐私</a>
+        <a href="https://github.com/ZanderKong/zhe-shi-sha-lai-zhe">GitHub</a>
+      </nav>
+    </header>
+
+    <main id="top">
+      <section class="hero" aria-labelledby="hero-title">
+        <div class="hero-content">
+          <p class="eyebrow">Chrome Manifest V3 Extension</p>
+          <h1 id="hero-title">这是啥来着</h1>
+          <p class="hero-copy">
+            在网页里划选陌生概念，立即获得结合上下文的简洁解释；只保存真正有价值的回答，形成低干扰的本地阅读记忆。
+          </p>
+          <div class="hero-actions">
+            <a class="button primary" href="#install">安装使用</a>
+            <a class="button" href="#workflow">查看流程</a>
+          </div>
+        </div>
+      </section>
+
+      <section class="section intro" aria-label="核心能力">
+        <div>
+          <p class="eyebrow">Why it exists</p>
+          <h2>让查词不打断阅读</h2>
+        </div>
+        <p>
+          阅读技术文档、论文、英文资料或行业文章时，最容易打断节奏的是陌生缩写、概念和上下文相关表达。这个插件把解释、追问和保存放在选中文本旁边，减少跳转、复制和整理成本。
+        </p>
+      </section>
+
+      <section id="workflow" class="section">
+        <div class="section-heading">
+          <p class="eyebrow">Workflow</p>
+          <h2>三步完成一次解释</h2>
+        </div>
+        <div class="steps">
+          <article>
+            <span>01</span>
+            <h3>划选概念</h3>
+            <p>在普通网页中选中词语、缩写或短句，插件会在选区旁显示轻量入口。</p>
+          </article>
+          <article>
+            <span>02</span>
+            <h3>解释或追问</h3>
+            <p>点击入口自动解释；长按可自定义问题，回答后还能继续围绕同一上下文追问。</p>
+          </article>
+          <article>
+            <span>03</span>
+            <h3>主动保存</h3>
+            <p>临时回答默认不进入历史。确认有价值后再保存全文或节选，避免历史记录膨胀。</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="scenarios" class="section band">
+        <div class="section-heading">
+          <p class="eyebrow">Scenarios</p>
+          <h2>适合这些阅读场景</h2>
+        </div>
+        <div class="scenario-grid">
+          <article>
+            <h3>技术文档</h3>
+            <p>快速解释 API、架构术语、库函数和配置项，保留与当前页面相关的解释。</p>
+          </article>
+          <article>
+            <h3>论文与报告</h3>
+            <p>结合前后文理解缩写、研究方法和关键概念，减少频繁切换搜索页面。</p>
+          </article>
+          <article>
+            <h3>英文资料</h3>
+            <p>翻译短语并说明语境含义，比单独查词更贴近当前文章。</p>
+          </article>
+          <article>
+            <h3>长期学习</h3>
+            <p>再次遇到保存过的词语时，以低干扰提示回看旧解释，形成可复用记忆。</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section split">
+        <div>
+          <p class="eyebrow">Model support</p>
+          <h2>连接你自己的模型服务</h2>
+        </div>
+        <div>
+          <p>
+            插件支持 DeepSeek、Kimi、火山方舟、智谱 GLM、MiniMax、硅基流动、OpenAI、OpenRouter、Groq、本地 Ollama、LM Studio，以及自定义 OpenAI-compatible 接口。
+          </p>
+          <p>
+            默认 prompt 可编辑，支持发送选区附近上下文，也可以关闭上下文，仅发送选中文本和问题。
+          </p>
+        </div>
+      </section>
+
+      <section id="privacy" class="section split">
+        <div>
+          <p class="eyebrow">Privacy</p>
+          <h2>本地优先，明确保存</h2>
+        </div>
+        <div>
+          <p>
+            设置、API Key 和保存的解释存储在浏览器本地的 <code>chrome.storage.local</code>。插件不包含遥测，也不向项目作者的服务器发送数据。
+          </p>
+          <p>
+            发起解释时，插件只会把选中文本、用户问题和可选上下文发送到用户配置的模型接口。
+          </p>
+        </div>
+      </section>
+
+      <section id="install" class="section install">
+        <div class="section-heading">
+          <p class="eyebrow">Install</p>
+          <h2>通过开发者模式加载</h2>
+        </div>
+        <ol>
+          <li>打开 <code>chrome://extensions</code> 并启用 Developer mode。</li>
+          <li>点击 Load unpacked，选择包含 <code>manifest.json</code> 的项目根目录。</li>
+          <li>打开插件设置页，填写模型提供商、API Base URL、API Key 和模型名。</li>
+          <li>刷新目标网页，划选文本后开始解释。</li>
+        </ol>
+      </section>
+    </main>
+
+    <footer>
+      <span>这是啥来着</span>
+      <a href="https://github.com/ZanderKong/zhe-shi-sha-lai-zhe">查看源码</a>
+    </footer>
+  </body>
+</html>

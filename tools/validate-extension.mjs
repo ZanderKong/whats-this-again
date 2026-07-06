@@ -81,6 +81,13 @@ const requiredFiles = new Set([
   "manifest.json",
   "README.md",
   "LICENSE",
+  "CHANGELOG.md",
+  "CONTRIBUTING.md",
+  "SECURITY.md",
+  "docs/index.html",
+  "docs/styles.css",
+  "docs/assets/hero-product.jpg",
+  "docs/assets/icon128.png",
   "src/background/background.js",
   "src/shared/constants.js",
   "src/content/content.js",
@@ -96,6 +103,10 @@ const requiredFiles = new Set([
 ]);
 
 for (const iconPath of Object.values(manifest.icons || {})) {
+  requiredFiles.add(iconPath);
+}
+
+for (const iconPath of Object.values(manifest.action?.default_icon || {})) {
   requiredFiles.add(iconPath);
 }
 
@@ -132,6 +143,20 @@ for (const [declaredSize, iconPath] of Object.entries(manifest.icons || {})) {
     }
   } catch (error) {
     fail(`${iconPath}: ${error.message}`);
+  }
+}
+
+for (const [declaredSize, iconPath] of Object.entries(manifest.action?.default_icon || {})) {
+  try {
+    const dimensions = pngDimensions(iconPath);
+    const expected = Number(declaredSize);
+    if (dimensions.width !== expected || dimensions.height !== expected) {
+      fail(`action default_icon ${iconPath} is ${dimensions.width}x${dimensions.height}, expected ${expected}x${expected}`);
+    } else {
+      pass(`Action icon ${iconPath} dimensions are ${expected}x${expected}`);
+    }
+  } catch (error) {
+    fail(`action default_icon ${iconPath}: ${error.message}`);
   }
 }
 

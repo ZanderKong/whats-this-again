@@ -1,31 +1,32 @@
 # Contributing
 
-Thank you for considering a contribution to 这是啥来着.
+感谢关注这是啥来着。项目欢迎问题反馈、功能建议和代码改进。
 
-## Development Principles
+## 开发原则
 
-- Keep the reading experience quiet and low-interruption.
-- Do not persist user data unless the user explicitly saves it.
-- Prefer local browser storage over external services.
-- Keep model provider integrations OpenAI-compatible where possible.
-- Avoid page DOM rewrites for history reminders; use lightweight overlays instead.
+- 保持阅读体验低干扰，不主动覆盖或改写页面正文。
+- 未经用户确认，不持久化临时回答。
+- 优先使用浏览器本地存储，避免引入不必要的外部服务。
+- 模型调用保持 OpenAI-compatible 接口风格，便于接入不同服务商。
+- 涉及权限、存储或隐私的改动需要在 PR 中明确说明影响。
 
-## Local Checks
+## 本地检查
 
-Run the validation script before opening a pull request:
+提交前请运行：
 
 ```bash
 npm run validate
 ```
 
-The project has no build step. Load the repository root as an unpacked Chrome extension during development.
+项目没有构建步骤。开发时可将仓库根目录作为 unpacked extension 加载到 Chrome。
 
-## Pull Requests
+## Pull Request
 
-Please include:
+PR 描述建议包含：
 
-- A concise description of the user-facing change.
-- Manual test notes, including the browser used.
-- Any permission, storage, or privacy impact.
+- 用户可感知的变化。
+- 主要实现思路。
+- 手动验证步骤和浏览器版本。
+- 权限、存储或隐私影响。
 
-UI changes should include screenshots or a short recording when possible.
+涉及 UI 的改动建议附截图或录屏，便于 review。
