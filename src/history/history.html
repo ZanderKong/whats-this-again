@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>这是啥来着 历史解释</title>
+    <link rel="stylesheet" href="./history.css">
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">这是啥来着</p>
+          <h1>全部历史解释</h1>
+        </div>
+        <div class="top-actions">
+          <button class="button primary" id="open-options" type="button">设置</button>
+        </div>
+      </header>
+
+      <section class="toolbar" aria-label="历史筛选">
+        <label class="search">
+          <span>搜索</span>
+          <input id="search" type="search" placeholder="保存词、回答内容、网站">
+        </label>
+        <label>
+          筛选
+          <select id="scope-filter">
+            <option value="all">全部</option>
+            <option value="currentPage">仅当前页面</option>
+            <option value="currentSite">当前网站</option>
+            <option value="global">全部网页</option>
+          </select>
+        </label>
+      </section>
+
+      <p class="summary" id="summary">读取历史中...</p>
+      <section id="history-list" class="history-list" aria-live="polite"></section>
+    </main>
+
+    <script src="../shared/constants.js"></script>
+    <script src="./history.js"></script>
+  </body>
+</html>

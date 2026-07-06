@@ -1,0 +1,22 @@
+{
+  "name": "zhe-shi-sha-lai-zhe",
+  "version": "0.2.0",
+  "private": false,
+  "description": "Chrome extension for contextual AI explanations and reusable local reading memories.",
+  "type": "module",
+  "scripts": {
+    "validate": "node tools/validate-extension.mjs",
+    "package": "node tools/package-extension.mjs"
+  },
+  "keywords": [
+    "chrome-extension",
+    "manifest-v3",
+    "ai",
+    "reading",
+    "openai-compatible"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  }
+}

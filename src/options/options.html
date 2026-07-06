@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>这是啥来着 设置</title>
+    <link rel="stylesheet" href="./options.css">
+  </head>
+  <body>
+    <main class="shell">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">这是啥来着</p>
+          <h1>记忆式阅读助手</h1>
+        </div>
+        <p class="status" id="status" role="status" aria-live="polite">已生效</p>
+      </header>
+
+      <form id="settings-form" class="grid">
+        <section class="section">
+          <h2>API</h2>
+          <label>
+            模型提供商
+            <select id="modelProvider" name="modelProvider"></select>
+          </label>
+          <label>
+            API Base URL
+            <input id="apiBaseUrl" name="apiBaseUrl" type="url" placeholder="https://api.deepseek.com/v1" autocomplete="off">
+          </label>
+          <label>
+            API Key
+            <input id="apiKey" name="apiKey" type="password" placeholder="sk-..." autocomplete="off">
+          </label>
+          <label>
+            Model
+            <input id="model" name="model" type="text" list="model-list" placeholder="deepseek-chat" autocomplete="off">
+            <datalist id="model-list"></datalist>
+          </label>
+          <div class="actions">
+            <button class="button primary" type="submit">保存设置</button>
+            <button class="button" id="refresh-models" type="button">刷新模型列表</button>
+            <button class="button" id="test-api" type="button">测试连接</button>
+          </div>
+          <p class="hint">拉不到模型列表时，仍可直接手动填写 OpenAI-compatible 模型名。本地 Ollama/LM Studio 可以留空 API Key。</p>
+        </section>
+
+        <section class="section">
+          <h2>提问</h2>
+          <label>
+            默认 Prompt
+            <textarea id="defaultQuestion" name="defaultQuestion" rows="5" placeholder="联系上下文，请用简洁中文解释这个概念。"></textarea>
+          </label>
+          <p class="hint">可使用 <code>{{term}}</code> 代表划线内容。</p>
+          <label class="choice">
+            <input id="includePageContext" name="includePageContext" type="checkbox">
+            划线提问时附带选区前后上下文
+          </label>
+        </section>
+
+        <section class="section">
+          <h2>记忆规则</h2>
+          <label>
+            默认保存范围
+            <select id="defaultSaveScope" name="defaultSaveScope"></select>
+          </label>
+          <label class="choice">
+            <input id="hideReminders" name="hideReminders" type="checkbox">
+            临时隐藏历史悬浮提醒
+          </label>
+        </section>
+
+        <section class="section">
+          <h2>主题色</h2>
+          <div class="color-control">
+            <span>主题色</span>
+            <div id="theme-presets" class="swatches" aria-label="主题色预设"></div>
+            <label class="inline-color">
+              自定义
+              <input id="highlightColor" name="highlightColor" type="color">
+            </label>
+          </div>
+          <p class="hint">主题色会同步到圆点、输入框、回答框和工具栏弹窗。</p>
+        </section>
+
+        <section class="section danger-zone">
+          <h2>历史数据</h2>
+          <p id="memory-count" class="hint">已保存 0 条记忆。</p>
+          <div class="actions">
+            <button class="button" id="open-history" type="button">全部历史解释</button>
+          </div>
+          <button class="button danger" id="clear-memories" type="button">清空所有历史记忆</button>
+        </section>
+      </form>
+    </main>
+
+    <script src="../shared/constants.js"></script>
+    <script src="./options.js"></script>
+  </body>
+</html>
