@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.0
+
+- Added Chinese/English language support with Auto, 中文, and English modes.
+- Added localized runtime copy for popup, settings, history, content panels, and background errors.
+- Updated the default prompts and answer-card title for the default explanation flow.
+- Added Chrome manifest locale files for Chinese and English.
+- Added English README, docs, contributing, and security pages.
+
 ## 0.2.1
 
 - Added 24px and 32px action icons to improve toolbar rendering across display densities.

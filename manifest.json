@@ -1,8 +1,9 @@
 {
   "manifest_version": 3,
-  "name": "这是啥来着",
-  "version": "0.2.1",
-  "description": "选中文章里的陌生概念，用自定义 AI 模型获取上下文解释，并保存有价值的回答以便回看。",
+  "name": "__MSG_extensionName__",
+  "version": "0.3.0",
+  "default_locale": "zh_CN",
+  "description": "__MSG_extensionDescription__",
   "minimum_chrome_version": "88",
   "icons": {
     "16": "assets/icon16.png",
@@ -34,7 +35,7 @@
   ],
   "options_page": "src/options/options.html",
   "action": {
-    "default_title": "这是啥来着",
+    "default_title": "__MSG_extensionActionTitle__",
     "default_popup": "src/popup/popup.html",
     "default_icon": {
       "16": "assets/icon16.png",

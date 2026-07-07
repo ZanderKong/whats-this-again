@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>这是啥来着 - Contextual AI Reading Explanation Extension</title>
+    <meta
+      name="description"
+      content="这是啥来着 is a Chrome extension for explaining unfamiliar concepts in technical docs, papers, English articles, and industry writing with contextual AI answers and local reading memories."
+    >
+    <link rel="icon" href="../assets/icon128.png">
+    <link rel="stylesheet" href="../styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="#top" aria-label="这是啥来着 home">
+        <img src="../assets/icon128.png" alt="" aria-hidden="true">
+        <span>这是啥来着</span>
+      </a>
+      <nav aria-label="Page navigation">
+        <a href="#workflow">Workflow</a>
+        <a href="#scenarios">Scenarios</a>
+        <a href="#privacy">Privacy</a>
+        <a href="../">中文</a>
+        <a href="https://github.com/ZanderKong/zhe-shi-sha-lai-zhe">GitHub</a>
+      </nav>
+    </header>
+
+    <main id="top">
+      <section class="hero" aria-labelledby="hero-title">
+        <div class="hero-content">
+          <p class="eyebrow">Chrome Manifest V3 Extension</p>
+          <h1 id="hero-title">这是啥来着</h1>
+          <p class="hero-copy">
+            Select unfamiliar concepts on a web page, get concise explanations grounded in nearby context, and save only the answers worth remembering.
+          </p>
+          <div class="hero-actions">
+            <a class="button primary" href="#install">Install</a>
+            <a class="button" href="#workflow">View workflow</a>
+          </div>
+        </div>
+      </section>
+
+      <section class="section intro" aria-label="Core capability">
+        <div>
+          <p class="eyebrow">Why it exists</p>
+          <h2>Look things up without breaking your reading flow</h2>
+        </div>
+        <p>
+          Technical docs, papers, English references, and industry articles often include acronyms, concepts, and expressions whose meaning depends on the surrounding text. This extension keeps explanations, follow-ups, and saving next to the selection so you spend less time copying, switching tabs, and organizing notes.
+        </p>
+      </section>
+
+      <section id="workflow" class="section">
+        <div class="section-heading">
+          <p class="eyebrow">Workflow</p>
+          <h2>Explain a selection in three steps</h2>
+        </div>
+        <div class="steps">
+          <article>
+            <span>01</span>
+            <h3>Select a concept</h3>
+            <p>Select a word, acronym, or short phrase on a regular web page. A lightweight entry dot appears near the selection.</p>
+          </article>
+          <article>
+            <span>02</span>
+            <h3>Explain or ask</h3>
+            <p>Click to run the default explanation prompt, or long-press to ask a custom question. Continue with follow-ups in the same context.</p>
+          </article>
+          <article>
+            <span>03</span>
+            <h3>Save intentionally</h3>
+            <p>Temporary answers are not saved by default. Save the full answer or an excerpt only when it is useful.</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="scenarios" class="section band">
+        <div class="section-heading">
+          <p class="eyebrow">Scenarios</p>
+          <h2>Built for focused reading</h2>
+        </div>
+        <div class="scenario-grid">
+          <article>
+            <h3>Technical docs</h3>
+            <p>Explain APIs, architecture terms, library functions, and configuration items while preserving page-specific context.</p>
+          </article>
+          <article>
+            <h3>Papers and reports</h3>
+            <p>Understand acronyms, methods, and key concepts from surrounding context without repeated search-tab switching.</p>
+          </article>
+          <article>
+            <h3>English references</h3>
+            <p>Translate phrases and explain what they mean in the current article, which is often more useful than a standalone dictionary lookup.</p>
+          </article>
+          <article>
+            <h3>Long-term learning</h3>
+            <p>When saved terms appear again, subtle reminders help you revisit previous explanations and build reusable reading memory.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section split">
+        <div>
+          <p class="eyebrow">Model support</p>
+          <h2>Connect your own model endpoint</h2>
+        </div>
+        <div>
+          <p>
+            The extension supports DeepSeek, Kimi, Volcengine Ark, Zhipu GLM, MiniMax, SiliconFlow, OpenAI, OpenRouter, Groq, local Ollama, LM Studio, and custom OpenAI-compatible endpoints.
+          </p>
+          <p>
+            The default prompt follows the selected language automatically, page context can be included or disabled, and the interface supports Chinese and English with Auto, 中文, and English language modes.
+          </p>
+        </div>
+      </section>
+
+      <section id="privacy" class="section split">
+        <div>
+          <p class="eyebrow">Privacy</p>
+          <h2>Local-first and explicit by default</h2>
+        </div>
+        <div>
+          <p>
+            Settings, API Keys, and saved explanations are stored locally in <code>chrome.storage.local</code>. The extension includes no telemetry and sends no data to project-operated servers.
+          </p>
+          <p>
+            When you generate an explanation, the extension only sends selected text, your question, and optional page context to the model endpoint you configure.
+          </p>
+        </div>
+      </section>
+
+      <section id="install" class="section install">
+        <div class="section-heading">
+          <p class="eyebrow">Install</p>
+          <h2>Load through Developer mode</h2>
+        </div>
+        <ol>
+          <li>Open <code>chrome://extensions</code> and enable Developer mode.</li>
+          <li>Click Load unpacked and choose the project root containing <code>manifest.json</code>.</li>
+          <li>Open the extension settings page and enter provider, API Base URL, API Key, and model name.</li>
+          <li>Refresh the target page, select text, and start explaining.</li>
+        </ol>
+      </section>
+    </main>
+
+    <footer>
+      <span>这是啥来着</span>
+      <a href="https://github.com/ZanderKong/zhe-shi-sha-lai-zhe">View source</a>
+    </footer>
+  </body>
+</html>

@@ -4,11 +4,19 @@
     STORAGE_KEYS,
     MESSAGE_TYPES,
     DEFAULT_SETTINGS,
+    LANGUAGES,
     MODEL_PROVIDERS,
     THEME_COLORS,
     SAVE_SCOPES,
     mergeSettings,
-    ensureStorageSchema
+    ensureStorageSchema,
+    getEffectiveLanguage,
+    getDefaultQuestion,
+    t,
+    applyI18n,
+    providerLabel,
+    colorLabel,
+    saveScopeLabel
   } = C;
 
   const form = document.getElementById("settings-form");
@@ -21,6 +29,7 @@
     apiBaseUrl: document.getElementById("apiBaseUrl"),
     apiKey: document.getElementById("apiKey"),
     model: document.getElementById("model"),
+    language: document.getElementById("language"),
     defaultQuestion: document.getElementById("defaultQuestion"),
     includePageContext: document.getElementById("includePageContext"),
     defaultSaveScope: document.getElementById("defaultSaveScope"),
@@ -34,17 +43,18 @@
   let suppressSettingsRender = false;
 
   init().catch((error) => {
-    showStatus(`加载失败：${error.message || error}`, true);
+    showStatus(t("options.loadFailed", { message: error.message || error }, currentLanguage()), true);
   });
 
   async function init() {
     await ensureStorageSchema(chrome.storage.local);
-    renderSelectOptions();
 
     const stored = await chrome.storage.local.get([STORAGE_KEYS.settings, STORAGE_KEYS.memories]);
     currentSettings = mergeSettings(stored[STORAGE_KEYS.settings]);
     currentMemories = stored[STORAGE_KEYS.memories] || {};
 
+    renderSelectOptions();
+    applyPageLanguage();
     renderForm();
     renderMemoryCount();
 
@@ -64,6 +74,8 @@
       }
       if (changes[STORAGE_KEYS.settings]) {
         currentSettings = mergeSettings(changes[STORAGE_KEYS.settings].newValue);
+        renderSelectOptions();
+        applyPageLanguage();
         if (!suppressSettingsRender) {
           renderForm();
         }
@@ -76,14 +88,21 @@
   }
 
   function renderSelectOptions() {
+    const language = currentLanguage();
+    fields.language.innerHTML = Object.values(LANGUAGES)
+      .map((item) => `<option value="${item.id}">${escapeHtml(t(item.labelKey, language))}</option>`)
+      .join("");
     fields.modelProvider.innerHTML = MODEL_PROVIDERS
-      .map((provider) => `<option value="${provider.id}">${escapeHtml(provider.label)}</option>`)
+      .map((provider) => `<option value="${provider.id}">${escapeHtml(providerLabel(provider, language))}</option>`)
       .join("");
     fields.defaultSaveScope.innerHTML = Object.entries(SAVE_SCOPES)
-      .map(([value, label]) => `<option value="${value}">${escapeHtml(label)}</option>`)
+      .map(([value]) => `<option value="${value}">${escapeHtml(saveScopeLabel(value, language))}</option>`)
       .join("");
     themePresets.innerHTML = THEME_COLORS
-      .map((color) => `<button class="swatch" type="button" data-color="${escapeHtml(color.value)}" title="${escapeHtml(color.label)}" aria-label="选择${escapeHtml(color.label)}色" style="--swatch:${escapeHtml(color.value)}"></button>`)
+      .map((color) => {
+        const label = colorLabel(color, language);
+        return `<button class="swatch" type="button" data-color="${escapeHtml(color.value)}" title="${escapeHtml(label)}" aria-label="${escapeHtml(t("popup.selectColor", { color: label }, language))}" style="--swatch:${escapeHtml(color.value)}"></button>`;
+      })
       .join("");
   }
 
@@ -92,7 +111,9 @@
     fields.apiBaseUrl.value = currentSettings.apiBaseUrl;
     fields.apiKey.value = currentSettings.apiKey;
     fields.model.value = currentSettings.model;
+    fields.language.value = currentSettings.language;
     fields.defaultQuestion.value = currentSettings.defaultQuestion;
+    fields.defaultQuestion.placeholder = getDefaultQuestion(currentSettings.language);
     fields.includePageContext.checked = currentSettings.includePageContext !== false;
     fields.defaultSaveScope.value = currentSettings.defaultSaveScope;
     fields.hideReminders.checked = Boolean(currentSettings.hideReminders);
@@ -101,12 +122,14 @@
   }
 
   function collectSettings() {
+    const language = fields.language.value;
     return mergeSettings({
       apiBaseUrl: fields.apiBaseUrl.value.trim(),
       apiKey: fields.apiKey.value.trim(),
       modelProvider: fields.modelProvider.value,
       model: fields.model.value.trim(),
-      defaultQuestion: fields.defaultQuestion.value.trim() || DEFAULT_SETTINGS.defaultQuestion,
+      language,
+      defaultQuestion: getDefaultQuestion(language),
       includePageContext: fields.includePageContext.checked,
       defaultSaveScope: fields.defaultSaveScope.value,
       hideReminders: fields.hideReminders.checked,
@@ -116,10 +139,26 @@
 
   async function handleSave(event) {
     event.preventDefault();
-    await persistSettings("已生效");
+    await persistSettings(t("options.statusReady", currentLanguage()));
   }
 
   function handleFormChange(event) {
+    if (event.target === fields.language) {
+      const nextSettings = mergeSettings({ ...currentSettings, language: fields.language.value });
+      currentSettings = nextSettings;
+      renderSelectOptions();
+      applyPageLanguage();
+      fields.language.value = currentSettings.language;
+      fields.modelProvider.value = currentSettings.modelProvider;
+      fields.defaultSaveScope.value = currentSettings.defaultSaveScope;
+      fields.defaultQuestion.value = getDefaultQuestion(currentSettings.language);
+      fields.defaultQuestion.placeholder = getDefaultQuestion(currentSettings.language);
+      applyDocumentTheme(fields.highlightColor.value);
+      renderMemoryCount();
+    }
+    if (event.target === fields.defaultQuestion) {
+      fields.defaultQuestion.value = getDefaultQuestion(fields.language.value);
+    }
     if (event.target === fields.highlightColor) {
       applyDocumentTheme(fields.highlightColor.value);
     }
@@ -129,7 +168,7 @@
   function scheduleSettingsSave() {
     window.clearTimeout(autoSaveTimer);
     autoSaveTimer = window.setTimeout(() => {
-      persistSettings("已生效").catch((error) => showStatus(error.message || String(error), true));
+      persistSettings(t("options.statusReady", currentLanguage())).catch((error) => showStatus(error.message || String(error), true));
     }, 450);
   }
 
@@ -138,7 +177,7 @@
     applyDocumentTheme(currentSettings.highlightColor);
     suppressSettingsRender = true;
     await chrome.storage.local.set({ [STORAGE_KEYS.settings]: currentSettings });
-    showStatus(message || "已生效");
+    showStatus(message || t("options.statusReady", currentLanguage()));
     window.setTimeout(() => {
       suppressSettingsRender = false;
     }, 100);
@@ -156,7 +195,7 @@
 
   async function handleTest() {
     const settings = collectSettings();
-    showStatus("正在测试 API...");
+    showStatus(t("options.testingApi", currentLanguage()));
 
     const response = await chrome.runtime.sendMessage({
       type: MESSAGE_TYPES.testApi,
@@ -164,9 +203,9 @@
     });
 
     if (response?.ok) {
-      showStatus("连接成功。");
+      showStatus(t("options.connected", currentLanguage()));
     } else {
-      showStatus(response?.error || "连接失败。", true);
+      showStatus(response?.error || t("options.connectionFailed", currentLanguage()), true);
     }
   }
 
@@ -180,7 +219,7 @@
       fields.model.value = provider.defaultModel;
     }
     modelList.innerHTML = "";
-    showStatus(provider.supportsModelList ? "已套用厂商预设，可刷新模型列表。" : "已套用厂商预设，可手动填写模型名。");
+    showStatus(provider.supportsModelList ? t("options.providerAppliedRefresh", currentLanguage()) : t("options.providerAppliedManual", currentLanguage()));
     scheduleSettingsSave();
   }
 
@@ -188,11 +227,11 @@
     const settings = collectSettings();
     const provider = MODEL_PROVIDERS.find((item) => item.id === settings.modelProvider);
     if (provider && provider.supportsModelList === false) {
-      showStatus("这个厂商暂不支持自动拉取模型列表，请手动填写模型名。", true);
+      showStatus(t("options.modelListUnsupported", currentLanguage()), true);
       return;
     }
 
-    showStatus("正在刷新模型列表...");
+    showStatus(t("options.refreshingModels", currentLanguage()));
     const response = await chrome.runtime.sendMessage({
       type: MESSAGE_TYPES.listModels,
       payload: { settingsOverride: settings }
@@ -200,7 +239,7 @@
 
     if (!response?.ok) {
       modelList.innerHTML = "";
-      showStatus(response?.error || "刷新失败，可手动填写模型名。", true);
+      showStatus(response?.error || t("options.refreshFailed", currentLanguage()), true);
       return;
     }
 
@@ -212,17 +251,17 @@
       fields.model.value = models[0];
       scheduleSettingsSave();
     }
-    showStatus(`已读取 ${models.length} 个模型，可在 Model 中选择或手动输入。`);
+    showStatus(t("options.modelsLoaded", { count: models.length }, currentLanguage()));
   }
 
   async function handleClearMemories() {
     const total = Object.keys(currentMemories).length;
     if (!total) {
-      showStatus("当前没有历史记忆。");
+      showStatus(t("options.noMemories", currentLanguage()));
       return;
     }
 
-    const confirmed = window.confirm(`确定清空 ${total} 条历史记忆？这个操作不可撤销。`);
+    const confirmed = window.confirm(t("options.clearConfirm", { count: total }, currentLanguage()));
     if (!confirmed) {
       return;
     }
@@ -230,17 +269,26 @@
     currentMemories = {};
     await chrome.storage.local.set({ [STORAGE_KEYS.memories]: {} });
     renderMemoryCount();
-    showStatus("已清空所有历史记忆。");
+    showStatus(t("options.memoriesCleared", currentLanguage()));
   }
 
   function renderMemoryCount() {
     const memories = Object.values(currentMemories);
     const cardCount = memories.reduce((sum, memory) => sum + (memory.cards || []).length, 0);
-    memoryCount.textContent = `已保存 ${memories.length} 条记忆，${cardCount} 张回答卡。`;
+    memoryCount.textContent = t("options.memoryCount", { memories: memories.length, cards: cardCount }, currentLanguage());
   }
 
   function openHistoryPage() {
     chrome.tabs.create({ url: chrome.runtime.getURL("src/history/history.html") });
+  }
+
+  function currentLanguage() {
+    return getEffectiveLanguage(currentSettings);
+  }
+
+  function applyPageLanguage() {
+    applyI18n(document, currentLanguage());
+    document.title = t("app.settingsTitle", currentLanguage());
   }
 
   function applyDocumentTheme(color) {
@@ -293,7 +341,7 @@
     status.style.color = isError ? "#b42318" : "var(--accent-strong)";
     window.clearTimeout(showStatus.timer);
     showStatus.timer = window.setTimeout(() => {
-      status.textContent = isError ? "本地设置" : "已生效";
+      status.textContent = isError ? t("options.localSettings", currentLanguage()) : t("options.statusReady", currentLanguage());
       status.style.color = "var(--accent-strong)";
     }, 3000);
   }

@@ -1,6 +1,6 @@
 {
   "name": "zhe-shi-sha-lai-zhe",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "private": false,
   "description": "Chrome extension for contextual AI explanations and reusable local reading memories.",
   "type": "module",

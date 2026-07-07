@@ -1,12 +1,34 @@
 # 这是啥来着
 
+[English](README.en.md)
+
 这是啥来着是一款 Chrome Manifest V3 阅读辅助插件。它面向技术文档、论文、英文资料和行业文章阅读场景，在用户划选陌生概念、缩写或短句后，调用用户配置的 AI 模型生成结合上下文的简洁解释，并把有价值的回答保存为本地阅读记忆。
 
 插件强调低干扰体验：解释默认是临时的，只有用户主动保存后才进入历史；再次遇到已保存词语时，页面只显示轻量提示，不长期覆盖正文。
 
+## 图文介绍与视频演示
+
+[点击观看演示视频](docs/assets/readme/demo.mp4)
+
+<video src="docs/assets/readme/demo.mp4" controls muted playsinline width="100%"></video>
+
+如果 GitHub 没有直接显示播放器，可以点击上方链接查看视频。
+
+<p align="center">
+  <img src="docs/assets/readme/how-to-use.png" alt="这是啥来着使用方法：短按解释、长按提问、悬浮查看、历史回看" width="720">
+</p>
+
+<p align="center">
+  <img src="docs/assets/readme/quick-lookup.png" alt="划词即查，留在当前语境里快速理解陌生概念" width="720">
+</p>
+
+<p align="center">
+  <img src="docs/assets/readme/keep-context.png" alt="不分屏、不跳出当前页面，让解释留在正在阅读的位置" width="720">
+</p>
+
 ## 当前版本
 
-- 扩展版本：`0.2.1`
+- 扩展版本：`0.3.0`
 - Manifest：Chrome Manifest V3
 - Landing page：`docs/index.html`
 - 数据存储：`chrome.storage.local`
@@ -63,10 +85,12 @@
 默认 prompt：
 
 ```text
-联系上下文，请用简洁中文解释这个概念。
+联系上下文{{term}} ，请用简洁中文解释这个概念。如果在该文中单独定义了该词，则回答。
 ```
 
-可以在设置页修改默认 prompt，并使用 `{{term}}` 引用当前选中的文本。
+从 `0.3.0` 起，插件支持中文和英文界面。语言默认跟随浏览器，也可在设置页手动切换。
+
+默认 prompt 会跟随设置页语言自动切换；其中 `{{term}}` 代表当前选中的文本。
 
 ## 隐私与数据
 
@@ -110,7 +134,12 @@
 ├── docs
 │   ├── assets
 │   │   ├── hero-product.jpg
-│   │   └── icon128.png
+│   │   ├── icon128.png
+│   │   └── readme
+│   │       ├── demo.mp4
+│   │       ├── how-to-use.png
+│   │       ├── keep-context.png
+│   │       └── quick-lookup.png
 │   ├── index.html
 │   └── styles.css
 ├── src

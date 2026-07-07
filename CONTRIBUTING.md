@@ -1,5 +1,7 @@
 # Contributing
 
+[English](CONTRIBUTING.en.md)
+
 感谢关注这是啥来着。项目欢迎问题反馈、功能建议和代码改进。
 
 ## 开发原则

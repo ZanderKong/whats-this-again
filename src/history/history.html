@@ -3,38 +3,38 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>这是啥来着 历史解释</title>
+    <title data-i18n="app.historyTitle">这是啥来着 历史解释</title>
     <link rel="stylesheet" href="./history.css">
   </head>
   <body>
     <main class="shell">
       <header class="topbar">
         <div>
-          <p class="eyebrow">这是啥来着</p>
-          <h1>全部历史解释</h1>
+          <p class="eyebrow" data-i18n="app.name">这是啥来着</p>
+          <h1 data-i18n="history.heading">全部历史解释</h1>
         </div>
         <div class="top-actions">
-          <button class="button primary" id="open-options" type="button">设置</button>
+          <button class="button primary" id="open-options" type="button" data-i18n="history.openOptions">设置</button>
         </div>
       </header>
 
-      <section class="toolbar" aria-label="历史筛选">
+      <section class="toolbar" data-i18n-aria-label="history.toolbarLabel" aria-label="历史筛选">
         <label class="search">
-          <span>搜索</span>
-          <input id="search" type="search" placeholder="保存词、回答内容、网站">
+          <span data-i18n="history.search">搜索</span>
+          <input id="search" type="search" data-i18n-placeholder="history.searchPlaceholder" placeholder="保存词、回答内容、网站">
         </label>
         <label>
-          筛选
+          <span data-i18n="history.filter">筛选</span>
           <select id="scope-filter">
-            <option value="all">全部</option>
-            <option value="currentPage">仅当前页面</option>
-            <option value="currentSite">当前网站</option>
-            <option value="global">全部网页</option>
+            <option value="all" data-i18n="history.filterAll">全部</option>
+            <option value="currentPage" data-i18n="history.filterCurrentPage">仅当前页面</option>
+            <option value="currentSite" data-i18n="history.filterCurrentSite">当前网站</option>
+            <option value="global" data-i18n="history.filterGlobal">全部网页</option>
           </select>
         </label>
       </section>
 
-      <p class="summary" id="summary">读取历史中...</p>
+      <p class="summary" id="summary" data-i18n="history.loading">读取历史中...</p>
       <section id="history-list" class="history-list" aria-live="polite"></section>
     </main>
 

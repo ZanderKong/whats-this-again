@@ -1,0 +1,11 @@
+{
+  "extensionName": {
+    "message": "这是啥来着"
+  },
+  "extensionDescription": {
+    "message": "选中文章里的陌生概念，用自定义 AI 模型获取上下文解释，并保存有价值的回答以便回看。"
+  },
+  "extensionActionTitle": {
+    "message": "这是啥来着"
+  }
+}

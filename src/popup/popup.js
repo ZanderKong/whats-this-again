@@ -6,7 +6,11 @@
     DEFAULT_SETTINGS,
     THEME_COLORS,
     mergeSettings,
-    ensureStorageSchema
+    ensureStorageSchema,
+    getEffectiveLanguage,
+    t,
+    applyI18n,
+    colorLabel
   } = C;
 
   const els = {
@@ -36,6 +40,7 @@
     settings = mergeSettings(stored[STORAGE_KEYS.settings]);
     memories = stored[STORAGE_KEYS.memories] || {};
 
+    applyPageLanguage();
     renderColorPresets();
     render();
     els.refreshPage.addEventListener("click", refreshCurrentPage);
@@ -47,22 +52,23 @@
 
   function render() {
     const pageUrl = safeUrl(activeTab?.url);
-    const host = pageUrl?.hostname || "非网页页面";
+    const language = currentLanguage();
+    const host = pageUrl?.hostname || t("popup.nonWebPage", language);
     const cards = Object.values(memories).reduce((sum, memory) => sum + (memory.cards || []).length, 0);
 
     els.host.textContent = host;
-    els.memoryCount.textContent = `${Object.keys(memories).length} 条记忆 / ${cards} 张卡片`;
-    els.apiState.textContent = settings.apiKey && settings.model ? "API 已配置" : "API 未配置";
-    els.toggleHighlights.textContent = settings.hideReminders ? "显示提醒" : "隐藏提醒";
+    els.memoryCount.textContent = t("popup.memoryCount", { memories: Object.keys(memories).length, cards }, language);
+    els.apiState.textContent = settings.apiKey && settings.model ? t("popup.apiConfigured", language) : t("popup.apiMissing", language);
+    els.toggleHighlights.textContent = settings.hideReminders ? t("popup.showReminders", language) : t("popup.hideReminders", language);
     applyDocumentTheme(settings.highlightColor);
 
     if (!pageUrl) {
       els.refreshPage.disabled = true;
-      setStatus("浏览器内部页不可注入。普通网页会自动启用。", "error");
+      setStatus(t("popup.internalPage", language), "error");
       return;
     }
 
-    setStatus("普通网页已自动启用。临时解释默认不保存。", "ok");
+    setStatus(t("popup.ready", language), "ok");
   }
 
   async function refreshCurrentPage() {
@@ -72,10 +78,10 @@
 
     try {
       await chrome.tabs.sendMessage(activeTab.id, { type: MESSAGE_TYPES.showReady });
-      setStatus("这是啥来着已刷新。", "ok");
+      setStatus(t("popup.refreshed", currentLanguage()), "ok");
     } catch (_) {
       await chrome.tabs.reload(activeTab.id);
-      setStatus("页面已刷新，插件会自动注入。", "ok");
+      setStatus(t("popup.pageReloaded", currentLanguage()), "ok");
     }
   }
 
@@ -86,8 +92,12 @@
   }
 
   function renderColorPresets() {
+    const language = currentLanguage();
     els.themePresets.innerHTML = THEME_COLORS
-      .map((color) => `<button class="swatch" type="button" data-color="${escapeHtml(color.value)}" title="${escapeHtml(color.label)}" aria-label="选择${escapeHtml(color.label)}色" style="--swatch:${escapeHtml(color.value)}"></button>`)
+      .map((color) => {
+        const label = colorLabel(color, language);
+        return `<button class="swatch" type="button" data-color="${escapeHtml(color.value)}" title="${escapeHtml(label)}" aria-label="${escapeHtml(t("popup.selectColor", { color: label }, language))}" style="--swatch:${escapeHtml(color.value)}"></button>`;
+      })
       .join("");
   }
 
@@ -121,6 +131,15 @@
     }
     const suffix = params.toString() ? `?${params.toString()}` : "";
     chrome.tabs.create({ url: chrome.runtime.getURL(`src/history/history.html${suffix}`) });
+  }
+
+  function currentLanguage() {
+    return getEffectiveLanguage(settings);
+  }
+
+  function applyPageLanguage() {
+    applyI18n(document, currentLanguage());
+    document.title = t("app.name", currentLanguage());
   }
 
   function safeUrl(url) {

@@ -1,0 +1,11 @@
+{
+  "extensionName": {
+    "message": "这是啥来着"
+  },
+  "extensionDescription": {
+    "message": "Select unfamiliar concepts in articles, get contextual AI explanations from your own model, and save useful answers for later."
+  },
+  "extensionActionTitle": {
+    "message": "这是啥来着"
+  }
+}

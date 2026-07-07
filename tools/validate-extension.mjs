@@ -54,6 +54,20 @@ function checkJavaScript(relativePath) {
   }
 }
 
+function isManifestMessage(value) {
+  return /^__MSG_[A-Za-z0-9_]+__$/.test(value || "");
+}
+
+function requireLocaleMessage(locale, key) {
+  const path = join(root, "_locales", locale, "messages.json");
+  const messages = readJson(path);
+  if (!messages?.[key]?.message) {
+    fail(`Missing _locales/${locale}/messages.json message: ${key}`);
+  } else {
+    pass(`Locale ${locale} has ${key}`);
+  }
+}
+
 const manifest = readJson(manifestPath);
 if (!manifest) {
   process.exit(1);
@@ -65,10 +79,16 @@ if (manifest.manifest_version !== 3) {
   pass("Manifest V3 detected");
 }
 
-if (manifest.name !== "这是啥来着") {
-  fail("manifest name must be “这是啥来着”");
+if (manifest.name !== "这是啥来着" && !isManifestMessage(manifest.name)) {
+  fail("manifest name must be “这是啥来着” or a __MSG_*__ locale reference");
 } else {
   pass("Extension name is correct");
+}
+
+if (manifest.default_locale !== "zh_CN") {
+  fail("default_locale must be zh_CN when manifest locale messages are used");
+} else {
+  pass("Default locale is zh_CN");
 }
 
 if (!/^\d+\.\d+\.\d+$/.test(manifest.version || "")) {
@@ -80,11 +100,17 @@ if (!/^\d+\.\d+\.\d+$/.test(manifest.version || "")) {
 const requiredFiles = new Set([
   "manifest.json",
   "README.md",
+  "README.en.md",
   "LICENSE",
   "CHANGELOG.md",
   "CONTRIBUTING.md",
+  "CONTRIBUTING.en.md",
   "SECURITY.md",
+  "SECURITY.en.md",
+  "_locales/zh_CN/messages.json",
+  "_locales/en/messages.json",
   "docs/index.html",
+  "docs/en/index.html",
   "docs/styles.css",
   "docs/assets/hero-product.jpg",
   "docs/assets/icon128.png",
@@ -130,6 +156,12 @@ if (manifest.options_page) {
 
 for (const relativePath of requiredFiles) {
   requireFile(relativePath);
+}
+
+for (const locale of ["zh_CN", "en"]) {
+  for (const key of ["extensionName", "extensionDescription", "extensionActionTitle"]) {
+    requireLocaleMessage(locale, key);
+  }
 }
 
 for (const [declaredSize, iconPath] of Object.entries(manifest.icons || {})) {

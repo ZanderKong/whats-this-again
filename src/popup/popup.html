@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>这是啥来着</title>
+    <title data-i18n="app.name">这是啥来着</title>
     <link rel="stylesheet" href="./popup.css">
   </head>
   <body>
@@ -11,28 +11,28 @@
       <header class="brand">
         <img class="mark" src="../../assets/icon48.png" alt="" aria-hidden="true">
         <div>
-          <h1>这是啥来着</h1>
-          <p id="host">当前页面</p>
+          <h1 data-i18n="app.name">这是啥来着</h1>
+          <p id="host" data-i18n="popup.currentPage">当前页面</p>
         </div>
       </header>
 
-      <p class="status" id="status" role="status" aria-live="polite">读取状态中...</p>
+      <p class="status" id="status" role="status" aria-live="polite" data-i18n="popup.loading">读取状态中...</p>
 
       <div class="actions">
-        <button class="button primary" id="refresh-page" type="button">注入插件 / 刷新</button>
-        <button class="button" id="toggle-highlights" type="button">隐藏提醒</button>
-        <button class="button" id="open-options" type="button">设置</button>
-        <button class="button wide" id="open-history" type="button">全部历史解释</button>
+        <button class="button primary" id="refresh-page" type="button" data-i18n="popup.refresh">注入插件 / 刷新</button>
+        <button class="button" id="toggle-highlights" type="button" data-i18n="popup.hideReminders">隐藏提醒</button>
+        <button class="button" id="open-options" type="button" data-i18n="popup.settings">设置</button>
+        <button class="button wide" id="open-history" type="button" data-i18n="popup.history">全部历史解释</button>
       </div>
 
-      <section class="color-panel" aria-label="快速选择主题色">
-        <span>主题色</span>
+      <section class="color-panel" data-i18n-aria-label="popup.themeColorAria" aria-label="快速选择主题色">
+        <span data-i18n="popup.themeColor">主题色</span>
         <div id="theme-presets" class="swatches"></div>
       </section>
 
       <div class="meta">
         <span id="memory-count">0 条记忆</span>
-        <span id="api-state">API 未配置</span>
+        <span id="api-state" data-i18n="popup.apiMissing">API 未配置</span>
       </div>
     </main>
 

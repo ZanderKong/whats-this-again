@@ -6,7 +6,9 @@ const {
   PORTS,
   mergeSettings,
   ensureStorageSchema,
-  completionUrl
+  completionUrl,
+  getEffectiveLanguage,
+  t
 } = globalThis.InlineAIConstants;
 
 ensureStorageSchema(chrome.storage.local).catch((error) => {
@@ -33,8 +35,9 @@ chrome.runtime.onConnect.addListener((port) => {
 
     controller = new AbortController();
 
+    let settings = null;
     try {
-      const settings = await getSettings(message.payload?.settingsOverride);
+      settings = await getSettings(message.payload?.settingsOverride);
       await streamChatCompletion({
         port,
         controller,
@@ -46,7 +49,7 @@ chrome.runtime.onConnect.addListener((port) => {
       postPort(port, {
         type: MESSAGE_TYPES.apiError,
         requestId: message.requestId,
-        error: humanizeError(error)
+        error: humanizeError(error, settings)
       });
     }
   });
@@ -56,7 +59,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type === MESSAGE_TYPES.testApi) {
     testApiConnection(message.payload?.settingsOverride)
       .then((result) => sendResponse({ ok: true, result }))
-      .catch((error) => sendResponse({ ok: false, error: humanizeError(error) }));
+      .catch((error) => sendResponse({ ok: false, error: humanizeError(error, message.payload?.settingsOverride) }));
 
     return true;
   }
@@ -64,7 +67,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type === MESSAGE_TYPES.listModels) {
     listModels(message.payload?.settingsOverride)
       .then((models) => sendResponse({ ok: true, models }))
-      .catch((error) => sendResponse({ ok: false, error: humanizeError(error) }));
+      .catch((error) => sendResponse({ ok: false, error: humanizeError(error, message.payload?.settingsOverride) }));
 
     return true;
   }
@@ -106,11 +109,12 @@ async function testApiConnection(settingsOverride) {
 
 async function listModels(settingsOverride) {
   const settings = await getSettings(settingsOverride);
+  const language = getEffectiveLanguage(settings);
   if (!settings.apiBaseUrl) {
-    throw new Error("请先填写 API Base URL。");
+    throw new Error(t("background.fillBaseUrl", language));
   }
   if (!settings.apiKey && !isLocalProvider(settings)) {
-    throw new Error("请先填写 API Key。");
+    throw new Error(t("background.fillApiKey", language));
   }
 
   const response = await fetch(modelsUrl(settings.apiBaseUrl), {
@@ -128,7 +132,7 @@ async function listModels(settingsOverride) {
     : [];
 
   if (!models.length) {
-    throw new Error("没有从该接口读到模型列表，请手动填写模型名。");
+    throw new Error(t("background.noModels", language));
   }
 
   return models;
@@ -222,14 +226,15 @@ function consumeSseBuffer(buffer, onChunk) {
 }
 
 function validateSettings(settings) {
+  const language = getEffectiveLanguage(settings);
   if (!completionUrl(settings.apiBaseUrl)) {
-    throw new Error("请先在“这是啥来着”设置中填写 API Base URL。");
+    throw new Error(t("background.fillBaseUrlInSettings", language));
   }
   if (!settings.apiKey && !isLocalProvider(settings)) {
-    throw new Error("请先在“这是啥来着”设置中填写 API Key。");
+    throw new Error(t("background.fillApiKeyInSettings", language));
   }
   if (!settings.model) {
-    throw new Error("请先在“这是啥来着”设置中填写模型名称。");
+    throw new Error(t("background.fillModelInSettings", language));
   }
 }
 
@@ -274,23 +279,24 @@ async function responseError(response) {
   return new Error(`${response.status}: ${message}`);
 }
 
-function humanizeError(error) {
+function humanizeError(error, settings) {
+  const language = getEffectiveLanguage(settings || {});
   if (error?.name === "AbortError") {
-    return "请求已取消。";
+    return t("background.cancelled", language);
   }
 
-  const message = String(error?.message || error || "未知错误");
+  const message = String(error?.message || error || t("background.unknownError", language));
   if (/401|invalid api key|unauthorized/i.test(message)) {
-    return "API Key 无效或没有权限。";
+    return t("background.invalidApiKey", language);
   }
   if (/404|model/i.test(message)) {
-    return `模型或接口不存在：${message}`;
+    return t("background.modelMissing", { message }, language);
   }
   if (/429|rate/i.test(message)) {
-    return "请求过于频繁或额度不足。";
+    return t("background.rateLimited", language);
   }
   if (/failed to fetch|network/i.test(message)) {
-    return "网络请求失败，请检查 API Base URL 或代理。";
+    return t("background.networkFailed", language);
   }
 
   return message;

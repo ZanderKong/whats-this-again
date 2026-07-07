@@ -3,7 +3,11 @@
   const {
     STORAGE_KEYS,
     MESSAGE_TYPES,
-    ensureStorageSchema
+    mergeSettings,
+    ensureStorageSchema,
+    getEffectiveLanguage,
+    t,
+    applyI18n
   } = C;
 
   const els = {
@@ -15,13 +19,14 @@
   };
 
   let memories = {};
+  let settings = mergeSettings();
   let activePageUrl = "";
   let activeHost = "";
   let groups = [];
   const expandedTerms = new Set();
 
   init().catch((error) => {
-    els.summary.textContent = `读取失败：${error.message || error}`;
+    els.summary.textContent = t("history.loadFailed", { message: error.message || error }, currentLanguage());
   });
 
   async function init() {
@@ -34,8 +39,10 @@
     activePageUrl = activePageUrl || (activeUrl ? `${activeUrl.origin}${activeUrl.pathname}${activeUrl.search}` : "");
     activeHost = activeHost || activeUrl?.hostname || "";
 
-    const stored = await chrome.storage.local.get([STORAGE_KEYS.memories]);
+    const stored = await chrome.storage.local.get([STORAGE_KEYS.settings, STORAGE_KEYS.memories]);
+    settings = mergeSettings(stored[STORAGE_KEYS.settings]);
     memories = stored[STORAGE_KEYS.memories] || {};
+    applyPageLanguage();
 
     els.search.addEventListener("input", render);
     els.scopeFilter.addEventListener("change", render);
@@ -50,6 +57,11 @@
         memories = changes[STORAGE_KEYS.memories].newValue || {};
         render();
       }
+      if (changes[STORAGE_KEYS.settings]) {
+        settings = mergeSettings(changes[STORAGE_KEYS.settings].newValue);
+        applyPageLanguage();
+        render();
+      }
     });
 
     render();
@@ -58,10 +70,10 @@
   function render() {
     groups = filterGroups(buildGroups());
     const answerCount = groups.reduce((sum, group) => sum + group.cards.length, 0);
-    els.summary.textContent = `共 ${groups.length} 个保存词，${answerCount} 条回答。`;
+    els.summary.textContent = t("history.summary", { terms: groups.length, answers: answerCount }, currentLanguage());
 
     if (!groups.length) {
-      els.list.innerHTML = `<p class="empty">没有匹配的历史解释。临时解释不会出现在这里，点击回答卡片里的“保存”后才会进入历史。</p>`;
+      els.list.innerHTML = `<p class="empty">${escapeHtml(t("history.empty", currentLanguage()))}</p>`;
       return;
     }
 
@@ -119,22 +131,22 @@
         <header class="memory-header">
           <div>
             <h3 class="term">${escapeHtml(group.term || "")}</h3>
-            <p class="summary-text">${escapeHtml(snippet(latest.response || "暂无回答摘要。", isExpanded ? 1200 : 260))}</p>
+            <p class="summary-text">${escapeHtml(snippet(latest.response || t("history.noSummary", currentLanguage()), isExpanded ? 1200 : 260))}</p>
             <p class="meta">
-              <span>${escapeHtml(memory.siteHost || "未知网站")}</span>
+              <span>${escapeHtml(memory.siteHost || t("history.unknownSite", currentLanguage()))}</span>
               <span>${escapeHtml(formatDateTime(memory.savedAt || latest.createdAt))}</span>
-              <span>关联位置 ${group.memories.length}</span>
-              <span>共 ${group.cards.length} 条回答</span>
+              <span>${escapeHtml(t("history.linkedLocations", { count: group.memories.length }, currentLanguage()))}</span>
+              <span>${escapeHtml(t("history.answerCount", { count: group.cards.length }, currentLanguage()))}</span>
             </p>
           </div>
           <div class="actions">
-            <button class="button" type="button" data-action="copy-group">复制</button>
-            <button class="button" type="button" data-action="open-page">打开原文</button>
-            ${group.cards.length > 1 ? `<button class="button" type="button" data-action="toggle-expand">${isExpanded ? "收起" : "展开"}</button>` : ""}
+            <button class="button" type="button" data-action="copy-group">${escapeHtml(t("history.copy", currentLanguage()))}</button>
+            <button class="button" type="button" data-action="open-page">${escapeHtml(t("history.openSource", currentLanguage()))}</button>
+            ${group.cards.length > 1 ? `<button class="button" type="button" data-action="toggle-expand">${escapeHtml(isExpanded ? t("history.collapse", currentLanguage()) : t("history.expand", currentLanguage()))}</button>` : ""}
             <span class="more-wrap">
-              <button class="button" type="button" data-action="toggle-more">更多</button>
+              <button class="button" type="button" data-action="toggle-more">${escapeHtml(t("history.more", currentLanguage()))}</button>
               <span class="more-menu hidden">
-                <button class="button danger" type="button" data-action="delete-group">删除</button>
+                <button class="button danger" type="button" data-action="delete-group">${escapeHtml(t("history.delete", currentLanguage()))}</button>
               </span>
             </span>
           </div>
@@ -150,12 +162,12 @@
         ${cards.map((card) => `
           <article class="answer-card">
             <header>
-              <h3>${escapeHtml(card.kind === "excerpt" ? "节选回答" : "完整回答")}</h3>
+              <h3>${escapeHtml(card.kind === "excerpt" ? t("history.excerptAnswer", currentLanguage()) : t("history.fullAnswer", currentLanguage()))}</h3>
               <p class="meta">${escapeHtml(formatDateTime(card.createdAt || card.memory?.savedAt))}</p>
             </header>
-            <p>${escapeHtml(card.response || "暂无回答。")}</p>
+            <p>${escapeHtml(card.response || t("history.noAnswer", currentLanguage()))}</p>
             ${(card.followups || []).map((item) => `
-              <p><strong>${escapeHtml(item.query || "追问")}</strong><br>${escapeHtml(item.response || "")}</p>
+              <p><strong>${escapeHtml(item.query || t("history.followup", currentLanguage()))}</strong><br>${escapeHtml(item.response || "")}</p>
             `).join("")}
           </article>
         `).join("")}
@@ -233,7 +245,7 @@
   }
 
   async function deleteGroup(group) {
-    const confirmed = window.confirm(`删除“${group.term}”的所有历史回答？`);
+    const confirmed = window.confirm(t("history.deleteConfirm", { term: group.term }, currentLanguage()));
     if (!confirmed) {
       return;
     }
@@ -247,20 +259,23 @@
 
   async function copyText(text) {
     await navigator.clipboard.writeText(text);
-    els.summary.textContent = "已复制。";
+    els.summary.textContent = t("history.copied", currentLanguage());
     window.clearTimeout(copyText.timer);
     copyText.timer = window.setTimeout(render, 1200);
   }
 
   function groupToText(group) {
     return [
-      `词语：${group.term}`,
-      `来源：${group.latestMemory?.pageTitle || group.latestMemory?.pageUrl || ""}`,
+      t("history.term", { term: group.term }, currentLanguage()),
+      t("history.source", { source: group.latestMemory?.pageTitle || group.latestMemory?.pageUrl || "" }, currentLanguage()),
       "",
       ...group.cards.map((card) => [
-        card.kind === "excerpt" ? "节选回答" : "完整回答",
+        card.kind === "excerpt" ? t("history.excerptAnswer", currentLanguage()) : t("history.fullAnswer", currentLanguage()),
         card.response || "",
-        ...(card.followups || []).flatMap((item) => [`追问：${item.query || ""}`, `回答：${item.response || ""}`])
+        ...(card.followups || []).flatMap((item) => [
+          t("history.followupLabel", { query: item.query || "" }, currentLanguage()),
+          t("history.answerLabel", { answer: item.response || "" }, currentLanguage())
+        ])
       ].join("\n"))
     ].join("\n\n");
   }
@@ -293,9 +308,18 @@
 
   function formatDateTime(value) {
     if (!value) {
-      return "未知时间";
+      return t("history.unknownTime", currentLanguage());
     }
     return new Date(value).toLocaleString();
+  }
+
+  function currentLanguage() {
+    return getEffectiveLanguage(settings);
+  }
+
+  function applyPageLanguage() {
+    applyI18n(document, currentLanguage());
+    document.title = t("app.historyTitle", currentLanguage());
   }
 
   function escapeHtml(value) {

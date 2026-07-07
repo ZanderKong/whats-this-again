@@ -1,5 +1,7 @@
 # Security Policy
 
+[English](SECURITY.en.md)
+
 ## 支持范围
 
 `main` 分支是当前受支持的开发线。安全修复会优先合入该分支。

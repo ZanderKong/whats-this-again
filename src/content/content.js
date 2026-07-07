@@ -18,7 +18,10 @@
     PORTS,
     LIMITS,
     mergeSettings,
-    ensureStorageSchema
+    ensureStorageSchema,
+    getEffectiveLanguage,
+    t,
+    isDefaultPromptQuestion
   } = C;
 
   const ROOT_ID = "inlineai-shadow-host";
@@ -49,6 +52,7 @@
   let dragState = null;
   let resizeState = null;
   let suppressPanelHeaderClick = false;
+  let pinnedPanelCounter = 0;
 
   init().catch((error) => {
     console.warn("[这是啥来着] Init failed:", error);
@@ -426,7 +430,7 @@
           z-index: 2;
         }
         .response:empty::before {
-          content: "正在等待回答...";
+          content: var(--iai-waiting-text);
           color: var(--iai-muted);
         }
         .response p { margin: 0 0 9px; }
@@ -534,10 +538,10 @@
           .surface-body { padding: 10px; }
         }
       </style>
-      <button id="bubble" class="hidden" type="button" title="点击解释，长按自定义提问" aria-label="点击解释，长按自定义提问"></button>
+      <button id="bubble" class="hidden" type="button" title="${escapeHtml(t("content.bubbleTitle", currentLanguage()))}" aria-label="${escapeHtml(t("content.bubbleTitle", currentLanguage()))}"></button>
       <div id="history-hint-line" class="hidden"></div>
-      <button id="history-hint" class="hidden" type="button" data-action="open-hover-memory" title="查看已保存解释" aria-label="查看已保存解释"></button>
-      <section id="panel" class="surface hidden" role="dialog" aria-modal="false" aria-label="这是啥来着"></section>
+      <button id="history-hint" class="hidden" type="button" data-action="open-hover-memory" title="${escapeHtml(t("content.historyHintTitle", currentLanguage()))}" aria-label="${escapeHtml(t("content.historyHintTitle", currentLanguage()))}"></button>
+      <section id="panel" class="surface hidden" role="dialog" aria-modal="false" aria-label="${escapeHtml(t("app.dialogLabel", currentLanguage()))}"></section>
       <div id="toast" class="hidden"></div>
     `;
 
@@ -547,6 +551,7 @@
     historyHint = shadow.getElementById("history-hint");
     historyHintLine = shadow.getElementById("history-hint-line");
     applyThemeVars();
+    updateLocalizedShellLabels();
   }
 
   function bindEvents() {
@@ -579,7 +584,7 @@
     chrome.storage.onChanged.addListener(handleStorageChange);
     chrome.runtime.onMessage.addListener((message) => {
       if (message?.type === MESSAGE_TYPES.showReady) {
-        showToast("这是啥来着已刷新。划线后点击圆点解释，长按自定义提问。");
+        showToast(t("content.readyToast", currentLanguage()));
       } else if (message?.type === MESSAGE_TYPES.openMemory) {
         const memory = memories[message.memoryId];
         if (memory) {
@@ -616,6 +621,7 @@
     if (changes[STORAGE_KEYS.settings]) {
       settings = mergeSettings(changes[STORAGE_KEYS.settings].newValue);
       applyThemeVars();
+      updateLocalizedShellLabels();
       injectMemoryStyle();
       scheduleHighlight();
     }
@@ -665,8 +671,9 @@
 
     bubble.classList.remove("hidden");
     bubble.title = selectionState.memories.length
-      ? "点击查看已有回答，长按自定义提问"
-      : "点击解释，长按自定义提问";
+      ? t("content.bubbleExistingTitle", currentLanguage())
+      : t("content.bubbleTitle", currentLanguage());
+    bubble.setAttribute("aria-label", bubble.title);
     positionElement(bubble, selectionState.rect, { mode: "bubble" });
   }
 
@@ -712,7 +719,9 @@
       return;
     }
 
-    if (action === "close") {
+    if (action === "close-pinned") {
+      closePinnedPanel(button);
+    } else if (action === "close") {
       closePanel();
     } else if (action === "send-new") {
       sendQuestion({ followup: false });
@@ -916,12 +925,15 @@
       return;
     }
 
+    pinCurrentPanelSnapshot();
     prepareTemporaryPanelState();
     hideBubble();
+    panelState.pendingQueryKind = "default";
+    panelState.pendingQuery = defaultQuestionFor(panelState.term);
     renderAnswerPanel({ loading: true });
     showPanel(selectionState.rect);
     window.setTimeout(() => {
-      sendQuestion({ questionOverride: defaultQuestionFor(panelState.term), followup: false });
+      sendQuestion({ questionOverride: panelState.pendingQuery, followup: false, queryKind: "default" });
     }, 30);
   }
 
@@ -930,6 +942,7 @@
       return;
     }
 
+    pinCurrentPanelSnapshot();
     prepareTemporaryPanelState();
     hideBubble();
     renderQuestionPanel();
@@ -1060,7 +1073,7 @@
     historyHintLine.classList.add("hidden");
 
     const count = historyRecordCount(match.memories);
-    historyHint.innerHTML = `<span>${escapeHtml(`存有 ${count} 条记录`)}</span>`;
+    historyHint.innerHTML = `<span>${escapeHtml(t("content.savedRecordCount", { count }, currentLanguage()))}</span>`;
     historyHint.classList.remove("hidden");
     window.requestAnimationFrame(() => positionHistoryHint(rect));
   }
@@ -1151,8 +1164,8 @@
     panel.className = panelClass();
     panel.innerHTML = surfaceShell(panelState.term, "", `
       <div class="prompt-composer">
-        <textarea id="inlineai-question" aria-label="自定义问题" placeholder="问点什么..." rows="1"></textarea>
-        <button class="button send-round" type="button" data-action="send-new" title="发送" aria-label="发送">↑</button>
+        <textarea id="inlineai-question" aria-label="${escapeHtml(t("content.customQuestionAria", currentLanguage()))}" placeholder="${escapeHtml(t("content.askPlaceholder", currentLanguage()))}" rows="1"></textarea>
+        <button class="button send-round" type="button" data-action="send-new" title="${escapeHtml(t("content.send", currentLanguage()))}" aria-label="${escapeHtml(t("content.send", currentLanguage()))}">↑</button>
       </div>
       <div id="inlineai-error" class="notice error hidden"></div>
       <div id="inlineai-response" class="response hidden"></div>
@@ -1178,8 +1191,8 @@
     panel.innerHTML = surfaceShell(panelState.term, "", `
       ${renderThread(panelState.currentCard)}
       <div class="prompt-composer">
-        <textarea id="inlineai-question" aria-label="继续追问" placeholder="继续围绕这个内容提问" rows="1"></textarea>
-        <button class="button send-round" type="button" data-action="send-followup" title="发送" aria-label="发送">↑</button>
+        <textarea id="inlineai-question" aria-label="${escapeHtml(t("content.followupAria", currentLanguage()))}" placeholder="${escapeHtml(t("content.followupPlaceholder", currentLanguage()))}" rows="1"></textarea>
+        <button class="button send-round" type="button" data-action="send-followup" title="${escapeHtml(t("content.send", currentLanguage()))}" aria-label="${escapeHtml(t("content.send", currentLanguage()))}">↑</button>
       </div>
       <div id="inlineai-error" class="notice error hidden"></div>
       <div id="inlineai-response" class="response hidden"></div>
@@ -1217,7 +1230,7 @@
     const closeAction = options.closeAction || "close";
     const closeButton = options.close === false
       ? ""
-      : `<button class="icon-button" type="button" data-action="${escapeHtml(closeAction)}" title="关闭" aria-label="关闭">×</button>`;
+      : `<button class="icon-button" type="button" data-action="${escapeHtml(closeAction)}" title="${escapeHtml(t("content.close", currentLanguage()))}" aria-label="${escapeHtml(t("content.close", currentLanguage()))}">×</button>`;
     const title = normalizeVisibleText(term);
 
     return `
@@ -1243,7 +1256,7 @@
     if (!isSaved) {
       const saveAction = excerpt ? "save-excerpt" : "save-answer";
       return `
-        <button class="button primary" id="inlineai-save-button" type="button" data-action="${saveAction}">${excerpt ? "保存节选" : "保存"}</button>
+        <button class="button primary" id="inlineai-save-button" type="button" data-action="${saveAction}">${escapeHtml(excerpt ? t("content.saveExcerpt", currentLanguage()) : t("content.save", currentLanguage()))}</button>
       `;
     }
 
@@ -1252,7 +1265,7 @@
 
   function renderMemoryCards(cards) {
     if (!cards.length) {
-      return `<div class="notice">这里暂时没有保存的回答。</div>`;
+      return `<div class="notice">${escapeHtml(t("content.noSavedAnswers", currentLanguage()))}</div>`;
     }
 
     return `
@@ -1268,17 +1281,21 @@
 
   function renderThread(card, { loading = false } = {}) {
     if (!card) {
+      if (loading) {
+        const query = displayQuery({ query: panelState?.pendingQuery || "", queryKind: panelState?.pendingQueryKind || "default" }, panelState?.term || "");
+        return `<article class="thread-message"><h3>${escapeHtml(query)}</h3><div id="inlineai-response" class="response"></div></article>`;
+      }
       return `<div id="inlineai-response" class="response ${loading ? "" : "hidden"}"></div>`;
     }
     const followups = card.followups || [];
     const messages = [
       ...followups.map((item) => ({
-        query: displayQuery(item.query, card.term || card.memory?.term),
+        query: displayQuery(item, card.term || card.memory?.term),
         response: item.response || "",
         createdAt: item.createdAt || 0
       })),
       {
-        query: displayQuery(card.query, card.term || card.memory?.term),
+        query: displayQuery(card, card.term || card.memory?.term),
         response: card.response || "",
         createdAt: card.createdAt || 0,
         memoryId: card.memory?.id || "",
@@ -1287,11 +1304,11 @@
     ].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
     return `
       <div class="thread-list">
-        ${loading ? `<article class="thread-message"><h3>正在回答</h3><div id="inlineai-response" class="response"></div></article>` : ""}
+        ${loading ? `<article class="thread-message"><h3>${escapeHtml(t("content.answering", currentLanguage()))}</h3><div id="inlineai-response" class="response"></div></article>` : ""}
         ${messages.map((item) => `
           <article class="thread-message">
             <h3>${escapeHtml(item.query)}</h3>
-            ${item.memoryId && item.cardId ? `<button class="button delete-answer" type="button" data-action="delete-card" data-memory-id="${escapeHtml(item.memoryId)}" data-card-id="${escapeHtml(item.cardId)}" title="删除" aria-label="删除这条保存的回答">×</button>` : ""}
+            ${item.memoryId && item.cardId ? `<button class="button delete-answer" type="button" data-action="delete-card" data-memory-id="${escapeHtml(item.memoryId)}" data-card-id="${escapeHtml(item.cardId)}" title="${escapeHtml(t("content.delete", currentLanguage()))}" aria-label="${escapeHtml(t("content.deleteSavedAnswer", currentLanguage()))}">×</button>` : ""}
             <div class="response">${renderMarkdown(item.response || "")}</div>
           </article>
         `).join("")}
@@ -1302,16 +1319,20 @@
   function renderFollowupComposer() {
     return `
       <div class="prompt-composer compact">
-        <textarea id="inlineai-question" aria-label="继续追问" placeholder="继续追问，Enter 发送，Shift+Enter 换行" rows="1"></textarea>
-        <button class="button send-round" type="button" data-action="send-followup" title="发送" aria-label="发送">↑</button>
+        <textarea id="inlineai-question" aria-label="${escapeHtml(t("content.followupAria", currentLanguage()))}" placeholder="${escapeHtml(t("content.followupComposerPlaceholder", currentLanguage()))}" rows="1"></textarea>
+        <button class="button send-round" type="button" data-action="send-followup" title="${escapeHtml(t("content.send", currentLanguage()))}" aria-label="${escapeHtml(t("content.send", currentLanguage()))}">↑</button>
       </div>
     `;
   }
 
-  function displayQuery(query, term) {
+  function displayQuery(item, term) {
+    const query = typeof item === "string" ? item : item?.query;
     const normalized = normalizeVisibleText(query);
+    if (item?.queryKind === "default" || isDefaultPromptQuestion(normalized, term)) {
+      return t("content.defaultQueryTitle", currentLanguage());
+    }
     if (!normalized || normalized === "节选回答" || normalized === "完整回答") {
-      return term ? `解释：${term}` : "解释";
+      return t("content.explain", currentLanguage());
     }
     return normalized;
   }
@@ -1325,7 +1346,7 @@
     `;
   }
 
-  async function sendQuestion({ questionOverride = "", followup = false } = {}) {
+  async function sendQuestion({ questionOverride = "", followup = false, queryKind = "custom" } = {}) {
     if (!panelState) {
       return;
     }
@@ -1333,7 +1354,7 @@
     const textarea = shadow.getElementById("inlineai-question");
     const question = normalizeVisibleText(questionOverride || textarea?.value || "");
     if (!question) {
-      showError("请先输入问题。");
+      showError(t("content.needQuestion", currentLanguage()));
       return;
     }
 
@@ -1341,11 +1362,11 @@
       renderAnswerPanel({ loading: true });
     }
     const responseNode = ensureResponseNode();
-    const buttons = Array.from(shadow.querySelectorAll("button,select"));
+    const buttons = Array.from(panel.querySelectorAll("button,select"));
     const previousResponse = threadToText(panelState.currentCard);
     let answer = "";
 
-    panelState.retry = { questionOverride: question, followup };
+    panelState.retry = { questionOverride: question, followup, queryKind };
     clearError();
     responseNode.classList.remove("hidden");
     responseNode.innerHTML = "";
@@ -1357,7 +1378,7 @@
 
     try {
       await streamApi({
-        messages: buildMessages(panelState.term, question, previousResponse, panelState.context),
+        messages: buildMessages(panelState.term, question, previousResponse, panelState.context, panelState.currentCard?.query),
         onChunk(chunk) {
           answer += chunk;
           responseNode.innerHTML = renderMarkdown(answer);
@@ -1366,7 +1387,7 @@
       });
 
       if (followup && panelState.currentCard) {
-        const followupEntry = { id: createId("follow"), query: question, response: answer, createdAt: Date.now() };
+        const followupEntry = { id: createId("follow"), query: question, queryKind: "custom", response: answer, createdAt: Date.now() };
         panelState.currentCard.followups = [...(panelState.currentCard.followups || []), followupEntry];
         await persistFollowupIfSaved(followupEntry);
       } else {
@@ -1374,6 +1395,7 @@
           id: createId("card"),
           messageId: createId("msg"),
           query: question,
+          queryKind,
           response: answer,
           kind: "full",
           createdAt: Date.now(),
@@ -1384,7 +1406,7 @@
       }
 
       renderAnswerPanel();
-      showToast("回答是临时的，点击保存才会进入历史。");
+      showToast(t("content.temporaryAnswer", currentLanguage()));
     } catch (error) {
       showError(humanizeContentError(error), true);
     } finally {
@@ -1396,13 +1418,13 @@
 
   async function saveCurrentAnswer({ kind }) {
     if (!panelState?.currentCard) {
-      showError("还没有可保存的回答。");
+      showError(t("content.noAnswerToSave", currentLanguage()));
       return;
     }
 
     const excerpt = kind === "excerpt" ? getSelectedResponseExcerpt() : "";
     if (kind === "excerpt" && !excerpt) {
-      showError("请先选中一段回答。");
+      showError(t("content.selectAnswerFirst", currentLanguage()));
       return;
     }
 
@@ -1413,6 +1435,7 @@
       id: kind === "excerpt" ? createId("card") : panelState.currentCard.id,
       messageId: panelState.currentCard.messageId || createId("msg"),
       query: panelState.currentCard.query,
+      queryKind: panelState.currentCard.queryKind || "custom",
       response: kind === "excerpt" ? excerpt : panelState.currentCard.response,
       kind: kind === "excerpt" ? "excerpt" : "full",
       createdAt: now,
@@ -1429,7 +1452,7 @@
 
     await chrome.storage.local.set({ [STORAGE_KEYS.memories]: memories });
     renderAnswerPanel();
-    showToast(kind === "excerpt" ? "已保存节选。" : "已保存到历史。");
+    showToast(kind === "excerpt" ? t("content.excerptSaved", currentLanguage()) : t("content.savedToHistory", currentLanguage()));
   }
 
   function findOrCreateMemory(scope, now) {
@@ -1495,7 +1518,7 @@
     if (!memory) {
       return;
     }
-    const confirmed = window.confirm(`删除“${memory.term}”的这条回答？`);
+    const confirmed = window.confirm(t("content.deleteCardConfirm", { term: memory.term }, currentLanguage()));
     if (!confirmed) {
       return;
     }
@@ -1521,7 +1544,7 @@
       panelState.savedMemoryId = "";
       panel.className = panelClass();
       panel.innerHTML = surfaceShell(panelState.term, "", `
-        <div class="notice">这条保存记录已经删除。</div>
+        <div class="notice">${escapeHtml(t("content.recordDeleted", currentLanguage()))}</div>
       `);
     }
   }
@@ -1557,6 +1580,7 @@
   function openMemoryList(memoryList, anchorRect) {
     hideHistoryHint();
     hideBubble();
+    pinCurrentPanelSnapshot();
     renderHistoryPanel(memoryList, anchorRect);
   }
 
@@ -1583,6 +1607,37 @@
 
   function panelIsOpen() {
     return Boolean(panel && !panel.classList.contains("hidden"));
+  }
+
+  function pinCurrentPanelSnapshot() {
+    if (!panelIsOpen() || !panelState?.currentCard) {
+      return;
+    }
+
+    const snapshot = panel.cloneNode(true);
+    snapshot.id = createId("pinned");
+    snapshot.dataset.inlineaiPinnedPanel = String(++pinnedPanelCounter);
+    snapshot.classList.remove("hidden");
+    snapshot.querySelectorAll("[id]").forEach((node) => node.removeAttribute("id"));
+    snapshot.querySelectorAll("textarea,input,select").forEach((node) => {
+      node.disabled = true;
+    });
+    snapshot.querySelectorAll("[data-action]").forEach((node) => {
+      if (node.dataset.action === "close") {
+        node.dataset.action = "close-pinned";
+        return;
+      }
+      node.removeAttribute("data-action");
+      if ("disabled" in node) {
+        node.disabled = true;
+      }
+      node.setAttribute("aria-disabled", "true");
+    });
+    shadow.insertBefore(snapshot, panel);
+  }
+
+  function closePinnedPanel(button) {
+    button.closest("[data-inlineai-pinned-panel]")?.remove();
   }
 
   function selectCardFromButton(button) {
@@ -1612,42 +1667,46 @@
       return "";
     }
     return [
-      `问题：${card.query || ""}`,
-      `回答：${card.response || ""}`,
-      ...(card.followups || []).flatMap((item) => [`追问：${item.query || ""}`, `回答：${item.response || ""}`])
+      t("content.threadQuestion", { query: card.query || "" }, currentLanguage()),
+      t("content.threadAnswer", { answer: card.response || "" }, currentLanguage()),
+      ...(card.followups || []).flatMap((item) => [
+        t("content.threadFollowup", { query: item.query || "" }, currentLanguage()),
+        t("content.threadAnswer", { answer: item.response || "" }, currentLanguage())
+      ])
     ].join("\n");
   }
 
   function humanizeContentError(error) {
-    const message = String(error?.message || error || "请求失败。");
+    const message = String(error?.message || error || t("content.requestFailed", currentLanguage()));
     if (/extension context invalidated/i.test(message)) {
-      return "扩展上下文已失效，请刷新页面后重试。";
+      return t("content.contextInvalidated", currentLanguage());
     }
     return message;
   }
 
-  function buildMessages(term, question, previousResponse, context) {
+  function buildMessages(term, question, previousResponse, context, previousQuestion = "") {
     const system = [
-      "你是“这是啥来着”的阅读解释助手。",
-      "回答要简洁、准确，帮助用户理解网页中刚划线的词语、句子或概念。",
-      "优先使用中文。",
-      "如果提供了页面上下文，请优先结合上下文判断划线内容的具体含义。",
-      "只有在上下文足以支撑时，才给和当前文章直接相关的短例子；上下文不足时不要编造例子。"
+      t("content.system.1", currentLanguage()),
+      t("content.system.2", currentLanguage()),
+      t("content.system.3", currentLanguage()),
+      t("content.system.4", currentLanguage()),
+      t("content.system.5", currentLanguage())
     ].join("\n");
     const contextBlock = formatContextBlock(context);
 
     if (previousResponse) {
+      const previousPrompt = previousQuestion || defaultQuestionFor(term);
       return [
         { role: "system", content: system },
-        { role: "user", content: `划线内容：${term}${contextBlock}\n\n问题：${settings.defaultQuestion}` },
+        { role: "user", content: `${t("content.selectedText", currentLanguage())}: ${term}${contextBlock}\n\n${t("content.question", currentLanguage())}: ${previousPrompt}` },
         { role: "assistant", content: previousResponse },
-        { role: "user", content: `继续围绕“${term}”回答：${question}${contextBlock}` }
+        { role: "user", content: `${t("content.continueAround", { term, question }, currentLanguage())}${contextBlock}` }
       ];
     }
 
     return [
       { role: "system", content: system },
-      { role: "user", content: `划线内容：${term}${contextBlock}\n\n问题：${question}` }
+      { role: "user", content: `${t("content.selectedText", currentLanguage())}: ${term}${contextBlock}\n\n${t("content.question", currentLanguage())}: ${question}` }
     ];
   }
 
@@ -1691,13 +1750,13 @@
         } else if (message.type === MESSAGE_TYPES.apiDone) {
           finish(resolve);
         } else if (message.type === MESSAGE_TYPES.apiError) {
-          finish(reject, new Error(message.error || "API 请求失败。"));
+          finish(reject, new Error(message.error || t("content.apiFailed", currentLanguage())));
         }
       });
 
       activePort.onDisconnect.addListener(() => {
         if (!settled) {
-          finish(reject, new Error("后台连接已中断，请重试。"));
+          finish(reject, new Error(t("content.backgroundDisconnected", currentLanguage())));
         }
       });
 
@@ -1913,7 +1972,7 @@
   function ensureResponseNode() {
     let responseNode = shadow.getElementById("inlineai-response");
     if (!responseNode) {
-      const body = shadow.querySelector(".surface-body");
+      const body = panel.querySelector(".surface-body");
       responseNode = document.createElement("div");
       responseNode.id = "inlineai-response";
       responseNode.className = "response";
@@ -1926,7 +1985,7 @@
     const excerpt = getSelectedResponseExcerpt();
     const save = shadow.getElementById("inlineai-save-button");
     if (save) {
-      save.textContent = excerpt ? "保存节选" : "保存";
+      save.textContent = excerpt ? t("content.saveExcerpt", currentLanguage()) : t("content.save", currentLanguage());
       save.dataset.action = excerpt ? "save-excerpt" : "save-answer";
     }
   }
@@ -1952,7 +2011,7 @@
       node.classList.add("error");
       node.innerHTML = `
         <span>${escapeHtml(message)}</span>
-        ${retryable ? `<button class="button" type="button" data-action="retry-request">重试</button>` : ""}
+        ${retryable ? `<button class="button" type="button" data-action="retry-request">${escapeHtml(t("content.retry", currentLanguage()))}</button>` : ""}
       `;
       node.classList.remove("hidden");
     }
@@ -2002,7 +2061,32 @@
     if (!settings.includePageContext || !context || (!context.before && !context.after)) {
       return "";
     }
-    return `\n\n页面上下文：\n前文：${context.before || "无"}\n选中：${context.selected || "无"}\n后文：${context.after || "无"}`;
+    return `\n\n${t("content.contextTitle", currentLanguage())}:\n${t("content.contextBefore", currentLanguage())}: ${context.before || t("content.none", currentLanguage())}\n${t("content.contextSelected", currentLanguage())}: ${context.selected || t("content.none", currentLanguage())}\n${t("content.contextAfter", currentLanguage())}: ${context.after || t("content.none", currentLanguage())}`;
+  }
+
+  function currentLanguage() {
+    return getEffectiveLanguage(settings);
+  }
+
+  function updateLocalizedShellLabels() {
+    if (!host) {
+      return;
+    }
+    host.style.setProperty("--iai-waiting-text", JSON.stringify(t("content.waiting", currentLanguage())));
+    if (bubble) {
+      const bubbleLabel = selectionState?.memories?.length
+        ? t("content.bubbleExistingTitle", currentLanguage())
+        : t("content.bubbleTitle", currentLanguage());
+      bubble.title = bubbleLabel;
+      bubble.setAttribute("aria-label", bubbleLabel);
+    }
+    if (historyHint) {
+      historyHint.title = t("content.historyHintTitle", currentLanguage());
+      historyHint.setAttribute("aria-label", historyHint.title);
+    }
+    if (panel) {
+      panel.setAttribute("aria-label", t("app.dialogLabel", currentLanguage()));
+    }
   }
 
   function renderMarkdown(text) {
