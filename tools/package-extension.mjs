@@ -4,7 +4,7 @@ import { join } from "node:path";
 
 const root = process.cwd();
 const distDir = join(root, "dist");
-const zipName = "zhe-shi-sha-lai-zhe.zip";
+const zipName = "whats-this-again.zip";
 
 execFileSync("node", ["tools/validate-extension.mjs"], { cwd: root, stdio: "inherit" });
 

@@ -193,7 +193,7 @@ npm run validate
 npm run package
 ```
 
-输出文件为 `dist/zhe-shi-sha-lai-zhe.zip`。正式提交 Chrome Web Store 前，还需要根据商店要求补充隐私政策、截图、分类和详细说明。
+输出文件为 `dist/whats-this-again.zip`。正式提交 Chrome Web Store 前，还需要根据商店要求补充隐私政策、截图、分类和详细说明。
 
 ## 已知限制
 

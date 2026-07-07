@@ -159,7 +159,7 @@ Create a zip package:
 npm run package
 ```
 
-The output is `dist/zhe-shi-sha-lai-zhe.zip`. Before submitting to the Chrome Web Store, add the store-required privacy policy, screenshots, category, and detailed listing copy.
+The output is `dist/whats-this-again.zip`. Before submitting to the Chrome Web Store, add the store-required privacy policy, screenshots, category, and detailed listing copy.
 
 ## Known Limits
 
