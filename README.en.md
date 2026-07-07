@@ -1,10 +1,67 @@
-# 这是啥来着
+# 「这是啥来着」
 
 [中文](README.md)
 
-这是啥来着 is a Chrome Manifest V3 reading assistant. When you select an unfamiliar concept, acronym, or short phrase on a web page, it calls your configured AI model to produce a concise contextual explanation and lets you save useful answers as local reading memories.
+「这是啥来着」 is a Chrome Manifest V3 reading assistant. When you select an unfamiliar concept, acronym, or short phrase on a web page, it calls your configured AI model to produce a concise contextual explanation and lets you save useful answers as local reading memories.
 
 The extension is designed to stay out of the way: explanations are temporary by default, history is only created when you save an answer, and saved terms show lightweight reminders instead of covering the page.
+
+## Quick Start
+
+### Install
+
+This repository provides the source form of an unpacked extension:
+
+1. Open `chrome://extensions`. If you use Vivaldi, you can also open `vivaldi://extensions`.
+2. Turn on **Developer mode** in the upper-right corner.
+3. Click **Load unpacked**. In Chinese browser UI, this may appear as **「加载已解包扩展」** or **「加载已解压的扩展程序」**.
+4. Select the project root that contains `manifest.json`.
+5. Open the 「这是啥来着」 settings page and configure provider, API Base URL, API Key, and model name.
+6. Refresh the target page and start selecting text.
+
+Browser internal pages, Chrome Web Store pages, and other extension pages cannot run content scripts because of Chrome security restrictions.
+
+### Use
+
+1. Select a word, acronym, or short phrase on a regular web page.
+2. Click the small dot next to the selection to run the default prompt.
+3. Long-press the dot to ask a custom question.
+4. Continue with follow-ups, or save the full answer or an excerpt.
+5. Later, hover matching saved terms to revisit previous explanations.
+
+## Visual Overview
+
+Click an image to open the full-size version.
+
+<table>
+  <tr>
+    <td width="33%" valign="top">
+      <a href="docs/assets/readme/how-to-use.png">
+        <img src="docs/assets/readme/how-to-use.png" alt="「这是啥来着」 workflow: short press, long press, floating answers, and history" width="100%">
+      </a>
+      <br>
+      <strong>Short press, long press</strong>
+    </td>
+    <td width="33%" valign="top">
+      <a href="docs/assets/readme/quick-lookup.png">
+        <img src="docs/assets/readme/quick-lookup.png" alt="Quick lookup while staying in the current reading context" width="100%">
+      </a>
+      <br>
+      <strong>Stay in context</strong>
+    </td>
+    <td width="33%" valign="top">
+      <a href="docs/assets/readme/keep-context.png">
+        <img src="docs/assets/readme/keep-context.png" alt="No split screen and no jumping away from the current page" width="100%">
+      </a>
+      <br>
+      <strong>No split screen</strong>
+    </td>
+  </tr>
+</table>
+
+## Friendly Link
+
+- [LINUX DO](https://linux.do) - a Chinese developer community. This project adds the friend link with reference to the [LINUX DO open-source promotion note](https://linux.do/t/topic/1776670).
 
 ## Current Version
 
@@ -24,27 +81,6 @@ The extension is designed to stay out of the way: explanations are temporary by 
 - **History reminders**: revisit saved explanations through subtle reminders when the term appears again.
 - **Multiple model providers**: supports common OpenAI-compatible services and local model servers.
 - **Local-first storage**: no telemetry and no project-operated backend.
-
-## Usage
-
-1. Select a word, acronym, or short phrase on a regular web page.
-2. Click the small dot next to the selection to run the default prompt.
-3. Long-press the dot to ask a custom question.
-4. Continue with follow-ups, or save the full answer or an excerpt.
-5. Later, hover matching saved terms to revisit previous explanations.
-
-Browser internal pages, Chrome Web Store pages, and other extension pages cannot run content scripts because of Chrome security restrictions.
-
-## Installation
-
-This repository provides an unpacked source extension:
-
-1. Open `chrome://extensions`.
-2. Enable `Developer mode`.
-3. Click `Load unpacked`.
-4. Select the project root that contains `manifest.json`.
-5. Open the extension settings page and configure provider, API Base URL, API Key, and model name.
-6. Refresh the target page and start selecting text.
 
 ## Model Configuration
 
@@ -76,7 +112,7 @@ The extension supports Chinese and English. Language defaults to browser languag
 
 ## Privacy and Data
 
-这是啥来着 does not send data to project-operated servers and includes no telemetry.
+「这是啥来着」 does not send data to project-operated servers and includes no telemetry.
 
 When generating an explanation, the extension sends these items to your configured model endpoint:
 

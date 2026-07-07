@@ -1,30 +1,67 @@
-# 这是啥来着
+# 「这是啥来着」
 
 [English](README.en.md)
 
-这是啥来着是一款 Chrome Manifest V3 阅读辅助插件。它面向技术文档、论文、英文资料和行业文章阅读场景，在用户划选陌生概念、缩写或短句后，调用用户配置的 AI 模型生成结合上下文的简洁解释，并把有价值的回答保存为本地阅读记忆。
+「这是啥来着」是一款 Chrome Manifest V3 阅读辅助插件。它面向技术文档、论文、英文资料和行业文章阅读场景，在用户划选陌生概念、缩写或短句后，调用用户配置的 AI 模型生成结合上下文的简洁解释，并把有价值的回答保存为本地阅读记忆。
 
 插件强调低干扰体验：解释默认是临时的，只有用户主动保存后才进入历史；再次遇到已保存词语时，页面只显示轻量提示，不长期覆盖正文。
 
-## 图文介绍与视频演示
+## 快速开始
 
-[点击观看演示视频](docs/assets/readme/demo.mp4)
+### 安装插件
 
-<video src="docs/assets/readme/demo.mp4" controls muted playsinline width="100%"></video>
+当前仓库提供源码形式的未打包扩展，可以按中文浏览器界面这样加载：
 
-如果 GitHub 没有直接显示播放器，可以点击上方链接查看视频。
+1. 打开 `chrome://extensions`。如果使用 Vivaldi，也可以打开 `vivaldi://extensions`。
+2. 打开右上角的「开发者模式」。
+3. 点击左上角的「加载已解包扩展」。Chrome 中文界面中这个按钮也可能显示为「加载已解压的扩展程序」。
+4. 选择本项目根目录，也就是包含 `manifest.json` 的目录。
+5. 打开「这是啥来着」设置页，配置模型提供商、API Base URL、API Key 和模型名。
+6. 刷新目标网页后开始划选文本。
 
-<p align="center">
-  <img src="docs/assets/readme/how-to-use.png" alt="这是啥来着使用方法：短按解释、长按提问、悬浮查看、历史回看" width="720">
-</p>
+浏览器内部页面、Chrome Web Store 页面和其他扩展页面无法运行内容脚本，这是 Chrome 的安全限制。
 
-<p align="center">
-  <img src="docs/assets/readme/quick-lookup.png" alt="划词即查，留在当前语境里快速理解陌生概念" width="720">
-</p>
+### 怎么使用
 
-<p align="center">
-  <img src="docs/assets/readme/keep-context.png" alt="不分屏、不跳出当前页面，让解释留在正在阅读的位置" width="720">
-</p>
+1. 在普通网页中选中一个词语、缩写或短句。
+2. 点击选区旁的小圆点，使用默认 prompt 生成解释。
+3. 如需自定义问题，长按小圆点打开输入框。
+4. 在回答面板中继续追问，或保存全文/节选。
+5. 后续再次遇到同一词语时，通过历史提示回看已保存解释。
+
+## 图文速览
+
+点击图片可以查看原图。
+
+<table>
+  <tr>
+    <td width="33%" valign="top">
+      <a href="docs/assets/readme/how-to-use.png">
+        <img src="docs/assets/readme/how-to-use.png" alt="「这是啥来着」使用方法：短按解释、长按提问、悬浮查看、历史回看" width="100%">
+      </a>
+      <br>
+      <strong>短按解释、长按提问</strong>
+    </td>
+    <td width="33%" valign="top">
+      <a href="docs/assets/readme/quick-lookup.png">
+        <img src="docs/assets/readme/quick-lookup.png" alt="划词即查，留在当前语境里快速理解陌生概念" width="100%">
+      </a>
+      <br>
+      <strong>留在当前语境里理解</strong>
+    </td>
+    <td width="33%" valign="top">
+      <a href="docs/assets/readme/keep-context.png">
+        <img src="docs/assets/readme/keep-context.png" alt="不分屏、不跳出当前页面，让解释留在正在阅读的位置" width="100%">
+      </a>
+      <br>
+      <strong>不分屏、不跳出页面</strong>
+    </td>
+  </tr>
+</table>
+
+## 友链
+
+- [LINUX DO](https://linux.do) - 面向开发者的中文社区。本项目根据 [LINUX DO 开源推广说明](https://linux.do/t/topic/1776670) 添加友链。
 
 ## 当前版本
 
@@ -44,27 +81,6 @@
 - **历史提示**：再次遇到保存过的词语时，以低干扰提示回看旧解释。
 - **多模型支持**：支持常见 OpenAI-compatible 服务和本地模型服务。
 - **本地优先**：插件不包含遥测，不向项目作者运营的服务器发送数据。
-
-## 使用流程
-
-1. 在普通网页中选中一个词语、缩写或短句。
-2. 点击选区旁的小圆点，使用默认 prompt 生成解释。
-3. 如需自定义问题，长按小圆点打开输入框。
-4. 在回答面板中继续追问，或保存全文/节选。
-5. 后续再次遇到同一词语时，通过历史提示回看已保存解释。
-
-浏览器内部页面、Chrome Web Store 页面和其他扩展页面无法运行内容脚本，这是 Chrome 的安全限制。
-
-## 安装
-
-当前仓库提供源码形式的未打包扩展，可通过 Chrome 开发者模式加载：
-
-1. 打开 `chrome://extensions`。
-2. 启用右上角的 `Developer mode`。
-3. 点击 `Load unpacked`。
-4. 选择本项目根目录，也就是包含 `manifest.json` 的目录。
-5. 打开插件设置页，配置模型提供商、API Base URL、API Key 和模型名。
-6. 刷新目标网页后开始划选文本。
 
 ## 模型配置
 
@@ -94,7 +110,7 @@
 
 ## 隐私与数据
 
-这是啥来着不会把数据发送到项目作者的服务器，也不包含遥测。
+「这是啥来着」不会把数据发送到项目作者的服务器，也不包含遥测。
 
 插件会在发起解释时向用户配置的模型接口发送：
 
@@ -136,7 +152,6 @@
 │   │   ├── hero-product.jpg
 │   │   ├── icon128.png
 │   │   └── readme
-│   │       ├── demo.mp4
 │   │       ├── how-to-use.png
 │   │       ├── keep-context.png
 │   │       └── quick-lookup.png
