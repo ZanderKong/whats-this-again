@@ -22,12 +22,15 @@
     openHistory: document.getElementById("open-history"),
     themePresets: document.getElementById("theme-presets"),
     memoryCount: document.getElementById("memory-count"),
+    annotationCount: document.getElementById("annotation-count"),
     apiState: document.getElementById("api-state")
   };
 
   let activeTab = null;
   let settings = mergeSettings(DEFAULT_SETTINGS);
   let memories = {};
+  let annotationBatches = {};
+  let activeAnnotationBatches = {};
 
   init().catch((error) => {
     setStatus(error.message || String(error), "error");
@@ -36,9 +39,11 @@
   async function init() {
     await ensureStorageSchema(chrome.storage.local);
     [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    const stored = await chrome.storage.local.get([STORAGE_KEYS.settings, STORAGE_KEYS.memories]);
+    const stored = await chrome.storage.local.get([STORAGE_KEYS.settings, STORAGE_KEYS.memories, STORAGE_KEYS.annotationBatches, STORAGE_KEYS.activeAnnotationBatches]);
     settings = mergeSettings(stored[STORAGE_KEYS.settings]);
     memories = stored[STORAGE_KEYS.memories] || {};
+    annotationBatches = stored[STORAGE_KEYS.annotationBatches] || {};
+    activeAnnotationBatches = stored[STORAGE_KEYS.activeAnnotationBatches] || {};
 
     applyPageLanguage();
     renderColorPresets();
@@ -58,6 +63,10 @@
 
     els.host.textContent = host;
     els.memoryCount.textContent = t("popup.memoryCount", { memories: Object.keys(memories).length, cards }, language);
+    const activeIds = new Set(Object.values(activeAnnotationBatches));
+    const activeItems = Array.from(activeIds).reduce((sum, id) => sum + (annotationBatches[id]?.items?.length || 0), 0);
+    const historyCount = Object.keys(annotationBatches).length;
+    els.annotationCount.textContent = t("popup.annotationCount", { history: historyCount, active: activeItems }, language);
     els.apiState.textContent = settings.apiKey && settings.model ? t("popup.apiConfigured", language) : t("popup.apiMissing", language);
     els.toggleHighlights.textContent = settings.hideReminders ? t("popup.showReminders", language) : t("popup.hideReminders", language);
     applyDocumentTheme(settings.highlightColor);

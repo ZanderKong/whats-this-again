@@ -11,19 +11,24 @@
       <header class="topbar">
         <div>
           <p class="eyebrow" data-i18n="app.name">这是啥来着</p>
-          <h1 data-i18n="history.heading">全部历史解释</h1>
+          <h1 id="history-heading" data-i18n="history.heading">全部历史解释</h1>
         </div>
         <div class="top-actions">
           <button class="button primary" id="open-options" type="button" data-i18n="history.openOptions">设置</button>
         </div>
       </header>
 
+      <nav class="history-tabs" aria-label="History type">
+        <button class="tab-button" id="tab-explanations" type="button" data-tab="explanations" data-i18n="history.tabExplanations">历史解释</button>
+        <button class="tab-button" id="tab-annotations" type="button" data-tab="annotations" data-i18n="history.tabAnnotations">历史批注</button>
+      </nav>
+
       <section class="toolbar" data-i18n-aria-label="history.toolbarLabel" aria-label="历史筛选">
         <label class="search">
           <span data-i18n="history.search">搜索</span>
           <input id="search" type="search" data-i18n-placeholder="history.searchPlaceholder" placeholder="保存词、回答内容、网站">
         </label>
-        <label>
+        <label id="scope-filter-wrap">
           <span data-i18n="history.filter">筛选</span>
           <select id="scope-filter">
             <option value="all" data-i18n="history.filterAll">全部</option>
@@ -39,6 +44,7 @@
     </main>
 
     <script src="../shared/constants.js"></script>
+    <script src="../shared/annotations.js"></script>
     <script src="./history.js"></script>
   </body>
 </html>

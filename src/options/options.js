@@ -22,6 +22,7 @@
   const form = document.getElementById("settings-form");
   const status = document.getElementById("status");
   const memoryCount = document.getElementById("memory-count");
+  const annotationCount = document.getElementById("annotation-count");
   const modelList = document.getElementById("model-list");
   const themePresets = document.getElementById("theme-presets");
   const fields = {
@@ -39,6 +40,8 @@
 
   let currentSettings = mergeSettings(DEFAULT_SETTINGS);
   let currentMemories = {};
+  let currentAnnotationBatches = {};
+  let currentActiveAnnotationBatches = {};
   let autoSaveTimer = null;
   let suppressSettingsRender = false;
 
@@ -49,9 +52,11 @@
   async function init() {
     await ensureStorageSchema(chrome.storage.local);
 
-    const stored = await chrome.storage.local.get([STORAGE_KEYS.settings, STORAGE_KEYS.memories]);
+    const stored = await chrome.storage.local.get([STORAGE_KEYS.settings, STORAGE_KEYS.memories, STORAGE_KEYS.annotationBatches, STORAGE_KEYS.activeAnnotationBatches]);
     currentSettings = mergeSettings(stored[STORAGE_KEYS.settings]);
     currentMemories = stored[STORAGE_KEYS.memories] || {};
+    currentAnnotationBatches = stored[STORAGE_KEYS.annotationBatches] || {};
+    currentActiveAnnotationBatches = stored[STORAGE_KEYS.activeAnnotationBatches] || {};
 
     renderSelectOptions();
     applyPageLanguage();
@@ -67,6 +72,8 @@
     document.getElementById("test-api").addEventListener("click", handleTest);
     document.getElementById("clear-memories").addEventListener("click", handleClearMemories);
     document.getElementById("open-history").addEventListener("click", openHistoryPage);
+    document.getElementById("open-annotation-history").addEventListener("click", () => openHistoryPage("annotations"));
+    document.getElementById("clear-annotations").addEventListener("click", handleClearAnnotations);
 
     chrome.storage.onChanged.addListener((changes, areaName) => {
       if (areaName !== "local") {
@@ -82,6 +89,14 @@
       }
       if (changes[STORAGE_KEYS.memories]) {
         currentMemories = changes[STORAGE_KEYS.memories].newValue || {};
+        renderMemoryCount();
+      }
+      if (changes[STORAGE_KEYS.annotationBatches]) {
+        currentAnnotationBatches = changes[STORAGE_KEYS.annotationBatches].newValue || {};
+        renderMemoryCount();
+      }
+      if (changes[STORAGE_KEYS.activeAnnotationBatches]) {
+        currentActiveAnnotationBatches = changes[STORAGE_KEYS.activeAnnotationBatches].newValue || {};
         renderMemoryCount();
       }
     });
@@ -276,10 +291,23 @@
     const memories = Object.values(currentMemories);
     const cardCount = memories.reduce((sum, memory) => sum + (memory.cards || []).length, 0);
     memoryCount.textContent = t("options.memoryCount", { memories: memories.length, cards: cardCount }, currentLanguage());
+    const active = new Set(Object.values(currentActiveAnnotationBatches));
+    const activeItems = Array.from(active).reduce((sum, id) => sum + (currentAnnotationBatches[id]?.items?.length || 0), 0);
+    annotationCount.textContent = t("options.annotationCount", { history: Object.keys(currentAnnotationBatches).length, active: activeItems }, currentLanguage());
   }
 
-  function openHistoryPage() {
-    chrome.tabs.create({ url: chrome.runtime.getURL("src/history/history.html") });
+  async function handleClearAnnotations() {
+    const total = Object.keys(currentAnnotationBatches).length;
+    if (!total || !window.confirm(t("options.clearAnnotationsConfirm", { count: total }, currentLanguage()))) return;
+    currentAnnotationBatches = {};
+    currentActiveAnnotationBatches = {};
+    await chrome.storage.local.set({ [STORAGE_KEYS.annotationBatches]: {}, [STORAGE_KEYS.activeAnnotationBatches]: {} });
+    renderMemoryCount();
+    showStatus(t("options.annotationsCleared", currentLanguage()));
+  }
+
+  function openHistoryPage(tab) {
+    chrome.tabs.create({ url: chrome.runtime.getURL(`src/history/history.html${tab === "annotations" ? "?tab=annotations" : ""}`) });
   }
 
   function currentLanguage() {

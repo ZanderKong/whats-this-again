@@ -69,6 +69,7 @@ function requireLocaleMessage(locale, key) {
 }
 
 const manifest = readJson(manifestPath);
+const packageJson = readJson(join(root, "package.json"));
 if (!manifest) {
   process.exit(1);
 }
@@ -97,6 +98,18 @@ if (!/^\d+\.\d+\.\d+$/.test(manifest.version || "")) {
   pass(`Version ${manifest.version}`);
 }
 
+if (packageJson?.version !== manifest.version) {
+  fail("package.json and manifest.json versions must match");
+} else {
+  pass("Package and manifest versions match");
+}
+
+if (!(manifest.permissions || []).includes("clipboardWrite") || (manifest.permissions || []).includes("clipboardRead")) {
+  fail("Annotation fallback requires clipboardWrite and must not request clipboardRead");
+} else {
+  pass("Clipboard permission is write-only");
+}
+
 const requiredFiles = new Set([
   "manifest.json",
   "README.md",
@@ -116,6 +129,8 @@ const requiredFiles = new Set([
   "docs/assets/icon128.png",
   "src/background/background.js",
   "src/shared/constants.js",
+  "src/shared/annotations.js",
+  "src/content/annotation-runtime.js",
   "src/content/content.js",
   "src/popup/popup.html",
   "src/popup/popup.css",
@@ -126,6 +141,12 @@ const requiredFiles = new Set([
   "src/history/history.html",
   "src/history/history.css",
   "src/history/history.js"
+  ,"tests/annotation-format.test.mjs"
+  ,"tests/annotation-state.test.mjs"
+  ,"tests/annotation-match.test.mjs"
+  ,"tests/annotation-storage.test.mjs"
+  ,"tests/fixtures/annotation-playground.html"
+  ,"tools/serve-fixtures.mjs"
 ]);
 
 for (const iconPath of Object.values(manifest.icons || {})) {
@@ -144,6 +165,14 @@ for (const script of manifest.content_scripts || []) {
   for (const jsPath of script.js || []) {
     requiredFiles.add(jsPath);
   }
+}
+
+const expectedContentOrder = ["src/shared/constants.js", "src/shared/annotations.js", "src/content/annotation-runtime.js", "src/content/content.js"];
+const loadedScripts = manifest.content_scripts?.[0]?.js || [];
+if (expectedContentOrder.some((script, index) => loadedScripts[index] !== script)) {
+  fail("Annotation content scripts are not loaded in dependency order");
+} else {
+  pass("Annotation content script order is correct");
 }
 
 if (manifest.action?.default_popup) {
@@ -195,6 +224,8 @@ for (const [declaredSize, iconPath] of Object.entries(manifest.action?.default_i
 [
   "src/background/background.js",
   "src/shared/constants.js",
+  "src/shared/annotations.js",
+  "src/content/annotation-runtime.js",
   "src/content/content.js",
   "src/popup/popup.js",
   "src/options/options.js",

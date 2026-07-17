@@ -41,6 +41,48 @@ body {
   box-shadow: 0 12px 34px rgba(23, 23, 23, 0.08);
 }
 
+.history-tabs {
+  display: flex;
+  gap: 4px;
+  margin-top: 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.tab-button {
+  border: 0;
+  border-bottom: 3px solid transparent;
+  padding: 10px 14px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font: 800 14px/1 ui-sans-serif, system-ui, sans-serif;
+}
+
+.tab-button.active {
+  border-bottom-color: var(--accent);
+  color: var(--accent-strong);
+}
+
+.annotation-items {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+
+.annotation-item {
+  display: grid;
+  gap: 5px;
+  border-left: 3px solid rgba(8, 127, 123, .32);
+  padding-left: 10px;
+}
+
+.annotation-item blockquote,
+.annotation-item p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.annotation-item blockquote { color: var(--muted); font-size: 13px; }
+.annotation-item p { font: 14px/1.5 ui-sans-serif, system-ui, sans-serif; }
+
 .topbar {
   display: flex;
   justify-content: space-between;

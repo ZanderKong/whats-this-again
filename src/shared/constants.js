@@ -4,10 +4,12 @@
     terms: "inlineai_terms",
     answers: "inlineai_answers",
     memories: "inlineai_memories",
+    annotationBatches: "inlineai_annotation_batches",
+    activeAnnotationBatches: "inlineai_active_annotation_batches",
     schemaVersion: "inlineai_schema_version"
   };
 
-  const CURRENT_SCHEMA_VERSION = 1;
+  const CURRENT_SCHEMA_VERSION = 2;
 
   const MESSAGE_TYPES = {
     apiCall: "INLINEAI_API_CALL",
@@ -77,6 +79,7 @@
       "popup.themeColorAria": "快速选择主题色",
       "popup.nonWebPage": "非网页页面",
       "popup.memoryCount": "{memories} 条记忆 / {cards} 张卡片",
+      "popup.annotationCount": "{history} 个历史批注批次 / {active} 条暂存批注",
       "popup.apiConfigured": "API 已配置",
       "popup.apiMissing": "API 未配置",
       "popup.internalPage": "浏览器内部页不可注入。普通网页会自动启用。",
@@ -104,7 +107,13 @@
       "options.customColor": "自定义",
       "options.themeHint": "主题色会同步到圆点、输入框、回答框和工具栏弹窗。",
       "options.historyData": "历史数据",
-      "options.clearMemories": "清空所有历史记忆",
+      "options.clearMemories": "清空历史解释",
+      "options.openExplanationHistory": "查看历史解释",
+      "options.openAnnotationHistory": "查看历史批注",
+      "options.clearAnnotations": "清空历史批注",
+      "options.annotationCount": "已保存 {history} 个批注批次，暂存 {active} 条批注。",
+      "options.clearAnnotationsConfirm": "确定清空 {count} 个历史批注批次？这个操作不可撤销。",
+      "options.annotationsCleared": "已清空所有历史批注。",
       "options.memoryInitial": "已保存 0 条记忆。",
       "options.loadFailed": "加载失败：{message}",
       "options.testingApi": "正在测试 API...",
@@ -121,6 +130,19 @@
       "options.memoriesCleared": "已清空所有历史记忆。",
       "options.memoryCount": "已保存 {memories} 条记忆，{cards} 张回答卡。",
       "history.heading": "全部历史解释",
+      "history.tabExplanations": "历史解释",
+      "history.tabAnnotations": "历史批注",
+      "history.annotationHeading": "历史批注",
+      "history.annotationSearchPlaceholder": "页面标题、地址、原文、批注",
+      "history.annotationSummary": "共 {batches} 个批注批次，{items} 条批注。",
+      "history.annotationEmpty": "没有匹配的历史批注。暂存和已处理批次都会保存在浏览器本地。",
+      "history.annotationStatusInjected": "已放入输入框",
+      "history.annotationStatusCopied": "已复制",
+      "history.annotationStatusPendingPaste": "已复制，等待粘贴",
+      "history.annotationStatusPasted": "已粘贴",
+      "history.annotationStatusCollecting": "暂存中",
+      "history.annotationStatusInjecting": "正在放入",
+      "history.annotationDeleteConfirm": "删除这个批注批次？",
       "history.openOptions": "设置",
       "history.toolbarLabel": "历史筛选",
       "history.search": "搜索",
@@ -164,6 +186,30 @@
       "content.customQuestionAria": "自定义问题",
       "content.askPlaceholder": "问点什么...",
       "content.send": "发送",
+      "content.annotation": "批注",
+      "content.annotationSaved": "已暂存 {count} 条批注。拖入输入框发给 AI，点击此处调整批注。",
+      "content.annotationBasketAria": "打开批注篮，共 {count} 条批注",
+      "content.annotationPanelTitle": "暂存批注 · {count}",
+      "content.annotationEdit": "编辑",
+      "content.annotationDelete": "删除",
+      "content.annotationCopyAll": "复制全部",
+      "content.annotationDrop": "松开放入 {count} 条批注",
+      "content.annotationInserted": "已放入输入框",
+      "content.annotationCopied": "已复制",
+      "content.annotationPasteHere": "已复制，粘贴到这里。",
+      "content.annotationPasteToAi": "批注已复制，请粘贴到 AI 输入框。",
+      "content.annotationFallbackCopied": "自动注入失败，已复制，直接粘贴就好啦。",
+      "content.annotationFallbackFailed": "自动注入和复制都失败了，请点击批注篮手动复制。",
+      "content.annotationPasteComplete": "匹配的批注已粘贴完成。",
+      "content.annotationHistoryHint": "可以在设置页查看历史批注。",
+      "content.annotationNeedNote": "请先填写批注意见。",
+      "content.annotationTooLong": "批注内容过长，请删减后再发送",
+      "content.annotationLimit": "本次批注已达到 50 条，请先发送或整理。",
+      "content.annotationSelectionTooLong": "选中的原文过长，最多 2000 个字符。",
+      "content.annotationAnchorMissing": "原文位置已变化",
+      "content.annotationCopyFailed": "复制失败，请检查浏览器权限后重试。",
+      "content.annotationChangedAfterCopy": "批注已更新，请重新复制或拖动。",
+      "content.annotationEmptyAfterDelete": "本次批注已清空。",
       "content.followupAria": "继续追问",
       "content.followupPlaceholder": "继续围绕这个内容提问",
       "content.followupComposerPlaceholder": "继续追问，Enter 发送，Shift+Enter 换行",
@@ -257,6 +303,7 @@
       "popup.themeColorAria": "Choose a theme color",
       "popup.nonWebPage": "Non-web page",
       "popup.memoryCount": "{memories} memories / {cards} cards",
+      "popup.annotationCount": "{history} annotation batches / {active} pending annotations",
       "popup.apiConfigured": "API configured",
       "popup.apiMissing": "API not configured",
       "popup.internalPage": "Browser internal pages cannot be injected. Regular web pages are enabled automatically.",
@@ -284,7 +331,13 @@
       "options.customColor": "Custom",
       "options.themeHint": "The theme color is applied to the dot, input, answer panel, and toolbar popup.",
       "options.historyData": "History data",
-      "options.clearMemories": "Clear all history memories",
+      "options.clearMemories": "Clear explanation history",
+      "options.openExplanationHistory": "View explanation history",
+      "options.openAnnotationHistory": "View annotation history",
+      "options.clearAnnotations": "Clear annotation history",
+      "options.annotationCount": "{history} annotation batches saved, {active} annotations pending.",
+      "options.clearAnnotationsConfirm": "Delete {count} annotation batches? This cannot be undone.",
+      "options.annotationsCleared": "Annotation history cleared.",
       "options.memoryInitial": "Saved 0 memories.",
       "options.loadFailed": "Load failed: {message}",
       "options.testingApi": "Testing API...",
@@ -301,6 +354,19 @@
       "options.memoriesCleared": "All history memories have been cleared.",
       "options.memoryCount": "Saved {memories} memories and {cards} answer cards.",
       "history.heading": "All History",
+      "history.tabExplanations": "Explanation history",
+      "history.tabAnnotations": "Annotation history",
+      "history.annotationHeading": "Annotation history",
+      "history.annotationSearchPlaceholder": "Page title, URL, quote, or annotation",
+      "history.annotationSummary": "{batches} annotation batches with {items} annotations.",
+      "history.annotationEmpty": "No matching annotations. Pending and completed batches are stored locally in your browser.",
+      "history.annotationStatusInjected": "Inserted into editor",
+      "history.annotationStatusCopied": "Copied",
+      "history.annotationStatusPendingPaste": "Copied, waiting for paste",
+      "history.annotationStatusPasted": "Pasted",
+      "history.annotationStatusCollecting": "Pending",
+      "history.annotationStatusInjecting": "Inserting",
+      "history.annotationDeleteConfirm": "Delete this annotation batch?",
       "history.openOptions": "Settings",
       "history.toolbarLabel": "History filters",
       "history.search": "Search",
@@ -344,6 +410,30 @@
       "content.customQuestionAria": "Custom question",
       "content.askPlaceholder": "Ask something...",
       "content.send": "Send",
+      "content.annotation": "Annotate",
+      "content.annotationSaved": "{count} annotations saved. Drag them into an AI editor, or click here to review.",
+      "content.annotationBasketAria": "Open annotation basket with {count} annotations",
+      "content.annotationPanelTitle": "Pending annotations · {count}",
+      "content.annotationEdit": "Edit",
+      "content.annotationDelete": "Delete",
+      "content.annotationCopyAll": "Copy all",
+      "content.annotationDrop": "Drop to insert {count} annotations",
+      "content.annotationInserted": "Inserted into editor",
+      "content.annotationCopied": "Copied",
+      "content.annotationPasteHere": "Copied. Paste it here.",
+      "content.annotationPasteToAi": "Annotations copied. Paste them into the AI editor.",
+      "content.annotationFallbackCopied": "Automatic insertion failed. The annotations were copied—just paste them.",
+      "content.annotationFallbackFailed": "Automatic insertion and copying both failed. Open the basket to copy manually.",
+      "content.annotationPasteComplete": "The matching annotations were pasted.",
+      "content.annotationHistoryHint": "You can view annotation history from Settings.",
+      "content.annotationNeedNote": "Write an annotation first.",
+      "content.annotationTooLong": "Annotations are too long. Shorten them before sending.",
+      "content.annotationLimit": "This batch has reached 50 annotations. Send or organize it first.",
+      "content.annotationSelectionTooLong": "The selected text is too long (maximum 2,000 characters).",
+      "content.annotationAnchorMissing": "Original location changed",
+      "content.annotationCopyFailed": "Copy failed. Check browser permissions and try again.",
+      "content.annotationChangedAfterCopy": "Annotations changed. Copy or drag them again.",
+      "content.annotationEmptyAfterDelete": "The annotation batch is empty.",
       "content.followupAria": "Continue asking",
       "content.followupPlaceholder": "Ask a follow-up about this",
       "content.followupComposerPlaceholder": "Follow up, Enter to send, Shift+Enter for newline",
@@ -499,7 +589,11 @@
   const LIMITS = {
     maxHistoryEntries: 5,
     maxTermKeyLength: 120,
-    maxSelectionLength: 240
+    maxSelectionLength: 240,
+    maxAnnotationSelectionLength: 2000,
+    maxAnnotationNoteLength: 4000,
+    maxAnnotationsPerBatch: 50,
+    maxAnnotationPayloadLength: 60000
   };
 
   function normalizeTerm(term) {
@@ -543,13 +637,18 @@
       return;
     }
 
-    const stored = await area.get([STORAGE_KEYS.schemaVersion, STORAGE_KEYS.memories]);
-    if (stored[STORAGE_KEYS.schemaVersion] !== CURRENT_SCHEMA_VERSION || !stored[STORAGE_KEYS.memories]) {
-      await area.set({
-        [STORAGE_KEYS.schemaVersion]: CURRENT_SCHEMA_VERSION,
-        [STORAGE_KEYS.memories]: stored[STORAGE_KEYS.memories] || {}
-      });
-    }
+    const stored = await area.get([
+      STORAGE_KEYS.schemaVersion,
+      STORAGE_KEYS.memories,
+      STORAGE_KEYS.annotationBatches,
+      STORAGE_KEYS.activeAnnotationBatches
+    ]);
+    const patch = {};
+    if (!stored[STORAGE_KEYS.memories] || typeof stored[STORAGE_KEYS.memories] !== "object") patch[STORAGE_KEYS.memories] = {};
+    if (!stored[STORAGE_KEYS.annotationBatches] || typeof stored[STORAGE_KEYS.annotationBatches] !== "object") patch[STORAGE_KEYS.annotationBatches] = {};
+    if (!stored[STORAGE_KEYS.activeAnnotationBatches] || typeof stored[STORAGE_KEYS.activeAnnotationBatches] !== "object") patch[STORAGE_KEYS.activeAnnotationBatches] = {};
+    if (stored[STORAGE_KEYS.schemaVersion] !== CURRENT_SCHEMA_VERSION) patch[STORAGE_KEYS.schemaVersion] = CURRENT_SCHEMA_VERSION;
+    if (Object.keys(patch).length) await area.set(patch);
     await area.remove([STORAGE_KEYS.terms, STORAGE_KEYS.answers]);
   }
 

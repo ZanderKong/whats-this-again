@@ -22,4 +22,6 @@ Helpful reports include:
 - API Keys are stored in `chrome.storage.local`.
 - The extension only sends selected text, user questions, and optional page context to the model endpoint configured by the user.
 - The extension includes no telemetry and does not use a project-operated backend service.
+- Annotation quotes, context, comments, and history stay in local browser storage and are not sent to project-operated servers.
+- The extension writes to the clipboard only after failed drag insertion or an explicit copy action. It does not read the clipboard or send messages automatically; the destination AI site processes content placed in its editor.
 - Local endpoints such as Ollama and LM Studio can be used without an API Key.

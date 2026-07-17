@@ -122,8 +122,9 @@
         </div>
         <div>
           <p>
-            Settings, API Keys, and saved explanations are stored locally in <code>chrome.storage.local</code>. The extension includes no telemetry and sends no data to project-operated servers.
+            Settings, API Keys, saved explanations, and annotation history are stored locally in <code>chrome.storage.local</code>. Annotation quotes, context, and comments are not sent to project-operated servers.
           </p>
+          <p>The extension writes to the clipboard only after failed drag insertion or an explicit copy action. It never reads the clipboard or sends messages automatically. Destination AI sites process content placed in their editors.</p>
           <p>
             When you generate an explanation, the extension only sends selected text, your question, and optional page context to the model endpoint you configure.
           </p>

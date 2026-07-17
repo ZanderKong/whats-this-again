@@ -4,7 +4,9 @@
   }
 
   const C = globalThis.InlineAIConstants;
-  if (!C) {
+  const A = globalThis.InlineAIAnnotations;
+  const AR = globalThis.InlineAIAnnotationRuntime;
+  if (!C || !A || !AR) {
     console.warn("[这是啥来着] Missing shared constants.");
     return;
   }
@@ -53,6 +55,25 @@
   let resizeState = null;
   let suppressPanelHeaderClick = false;
   let pinnedPanelCounter = 0;
+  let annotationBatches = {};
+  let activeAnnotationBatches = {};
+  let activeAnnotationBatch = null;
+  let annotationRanges = new Map();
+  let annotationRectCache = [];
+  let annotationBasket = null;
+  let annotationHighlightLayer = null;
+  let editorDropTarget = null;
+  let annotationBasketTimer = null;
+  let annotationFrame = 0;
+  let annotationObserver = null;
+  let annotationResizeObserver = null;
+  let annotationInteraction = null;
+  let annotationDropEditor = null;
+  let annotationViewportListenersBound = false;
+  let annotationDragListenersBound = false;
+  let annotationPasteListenersBound = false;
+  let lastKnownHref = location.href;
+  let pendingPasteSignal = null;
 
   init().catch((error) => {
     console.warn("[这是啥来着] Init failed:", error);
@@ -61,9 +82,14 @@
 
   async function init() {
     await ensureStorageSchema(chrome.storage.local);
-    const stored = await chrome.storage.local.get([STORAGE_KEYS.settings, STORAGE_KEYS.memories]);
+    const stored = await chrome.storage.local.get([
+      STORAGE_KEYS.settings, STORAGE_KEYS.memories,
+      STORAGE_KEYS.annotationBatches, STORAGE_KEYS.activeAnnotationBatches
+    ]);
     settings = mergeSettings(stored[STORAGE_KEYS.settings]);
     memories = stored[STORAGE_KEYS.memories] || {};
+    annotationBatches = stored[STORAGE_KEYS.annotationBatches] || {};
+    activeAnnotationBatches = stored[STORAGE_KEYS.activeAnnotationBatches] || {};
 
     globalThis.__INLINEAI_CONTENT_LOADED__ = true;
     globalThis.__INLINEAI_CONTENT_LOADING__ = false;
@@ -72,6 +98,7 @@
     injectMemoryStyle();
     bindEvents();
     scheduleHighlight();
+    await loadActiveAnnotationBatch();
   }
 
   function createShadowUi() {
@@ -532,6 +559,89 @@
           outline: 3px solid rgba(var(--iai-accent-rgb), 0.18);
           outline-offset: 2px;
         }
+        #annotation-highlight-layer,
+        #editor-drop-target {
+          position: fixed;
+          inset: 0;
+          pointer-events: none;
+        }
+        .annotation-highlight {
+          position: fixed;
+          border-radius: 3px;
+          background: rgba(var(--iai-accent-rgb), 0.2);
+          box-shadow: inset 0 -2px 0 rgba(var(--iai-accent-rgb), 0.58);
+          pointer-events: none;
+        }
+        #annotation-basket {
+          position: fixed;
+          right: 16px;
+          bottom: 16px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          max-width: min(390px, calc(100vw - 32px));
+          min-width: 42px;
+          min-height: 42px;
+          border: 1px solid rgba(var(--iai-accent-rgb), 0.42);
+          border-radius: 14px;
+          padding: 10px 13px;
+          background: linear-gradient(145deg, var(--iai-paper), rgba(var(--iai-accent-rgb), 0.1));
+          color: var(--iai-ink);
+          box-shadow: 0 16px 38px rgba(15, 23, 42, 0.2);
+          cursor: grab;
+          pointer-events: auto;
+          font: 700 13px/1.35 ui-serif, Georgia, "Songti SC", serif;
+          text-align: left;
+          transition: width 180ms ease, border-radius 180ms ease, transform 180ms ease;
+        }
+        #annotation-basket.compact {
+          width: 44px;
+          height: 44px;
+          padding: 0;
+          border-radius: 50%;
+          font: 800 15px/1 ui-sans-serif, system-ui, sans-serif;
+        }
+        #annotation-basket.copied::after {
+          content: "✓";
+          margin-left: 7px;
+          color: var(--iai-accent-strong);
+        }
+        #annotation-basket.dragging { cursor: grabbing; transform: scale(0.96); opacity: 0.72; }
+        #annotation-basket:focus-visible { outline: 3px solid rgba(var(--iai-accent-rgb), 0.28); outline-offset: 3px; }
+        #editor-drop-target {
+          inset: auto;
+          z-index: 3;
+          display: flex;
+          align-items: flex-end;
+          justify-content: center;
+          border: 3px solid var(--iai-accent);
+          border-radius: 12px;
+          background: rgba(var(--iai-accent-rgb), 0.08);
+          box-shadow: 0 0 0 5px rgba(var(--iai-accent-rgb), 0.12);
+        }
+        #editor-drop-target span {
+          margin: 0 0 8px;
+          border-radius: 999px;
+          padding: 6px 10px;
+          background: var(--iai-accent-strong);
+          color: white;
+          font: 700 12px/1.2 ui-sans-serif, system-ui, sans-serif;
+        }
+        .annotation-list { display: grid; gap: 12px; }
+        .annotation-card { position: relative; border: 1px solid var(--iai-line); border-radius: 12px; padding: 14px 42px 14px 14px; background: rgba(255,255,255,.72); }
+        .annotation-delete { position: absolute; top: 8px; right: 8px; width: 28px; height: 28px; border: 0; border-radius: 50%; background: transparent; color: var(--iai-muted); font: 400 20px/1 ui-serif, Georgia, serif; cursor: pointer; }
+        .annotation-delete:hover { background: rgba(var(--iai-accent-rgb),.08); color: var(--iai-accent-strong); }
+        .annotation-delete:focus-visible { outline: 2px solid rgba(var(--iai-accent-rgb),.32); outline-offset: 1px; }
+        .annotation-quote { margin: 0 0 11px; border-left: 2px solid rgba(var(--iai-accent-rgb),.28); padding-left: 10px; color: #9a9489; font: 13px/1.65 ui-serif, Georgia, "Songti SC", serif; white-space: pre-wrap; }
+        .annotation-quote strong { color: var(--iai-accent-strong); font-weight: 750; }
+        .annotation-location-note { display: block; margin-top: 5px; color: #a34f3d; font: 600 11px/1.4 ui-sans-serif, system-ui, sans-serif; }
+        .annotation-note-button { display: block; width: 100%; margin: 0; border: 0; border-radius: 8px; padding: 7px 8px; background: transparent; color: var(--iai-ink); text-align: left; font: 600 14px/1.55 ui-sans-serif, system-ui, sans-serif; white-space: pre-wrap; cursor: text; }
+        .annotation-note-button:hover { background: rgba(var(--iai-accent-rgb),.06); }
+        .annotation-note-button:focus-visible { outline: 2px solid rgba(var(--iai-accent-rgb),.3); outline-offset: 1px; }
+        .annotation-edit-area { width: 100%; min-height: 72px; margin: 0; border: 1px solid rgba(var(--iai-accent-rgb),.36); border-radius: 8px; padding: 8px; color: var(--iai-ink); background: rgba(255,255,255,.88); font: 600 14px/1.55 ui-sans-serif, system-ui, sans-serif; resize: vertical; }
+        .annotation-footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+        .prompt-composer.annotation-enabled { grid-template-columns: minmax(0, 1fr) auto auto; }
+        .annotation-action { color: var(--iai-accent-strong); border-color: rgba(var(--iai-accent-rgb), .32); }
         @media (max-width: 520px) {
           .surface { width: calc(100vw - 18px); }
           .term-title { max-width: calc(100vw - 120px); font-size: 16px; }
@@ -541,6 +651,9 @@
       <button id="bubble" class="hidden" type="button" title="${escapeHtml(t("content.bubbleTitle", currentLanguage()))}" aria-label="${escapeHtml(t("content.bubbleTitle", currentLanguage()))}"></button>
       <div id="history-hint-line" class="hidden"></div>
       <button id="history-hint" class="hidden" type="button" data-action="open-hover-memory" title="${escapeHtml(t("content.historyHintTitle", currentLanguage()))}" aria-label="${escapeHtml(t("content.historyHintTitle", currentLanguage()))}"></button>
+      <div id="annotation-highlight-layer" aria-hidden="true"></div>
+      <div id="editor-drop-target" class="hidden" aria-hidden="true"><span></span></div>
+      <button id="annotation-basket" class="hidden" draggable="true" type="button" data-action="open-annotation-basket" aria-live="polite"></button>
       <section id="panel" class="surface hidden" role="dialog" aria-modal="false" aria-label="${escapeHtml(t("app.dialogLabel", currentLanguage()))}"></section>
       <div id="toast" class="hidden"></div>
     `;
@@ -550,6 +663,9 @@
     toast = shadow.getElementById("toast");
     historyHint = shadow.getElementById("history-hint");
     historyHintLine = shadow.getElementById("history-hint-line");
+    annotationBasket = shadow.getElementById("annotation-basket");
+    annotationHighlightLayer = shadow.getElementById("annotation-highlight-layer");
+    editorDropTarget = shadow.getElementById("editor-drop-target");
     applyThemeVars();
     updateLocalizedShellLabels();
   }
@@ -568,18 +684,26 @@
     document.addEventListener("keydown", handleDocumentKeydown, true);
     document.addEventListener("mousemove", handleDragMove, true);
     document.addEventListener("mouseup", handleDragEnd, true);
-    document.addEventListener("scroll", hideHistoryHint, true);
-
+    window.addEventListener("popstate", checkAnnotationPageChange);
+    window.addEventListener("hashchange", checkAnnotationPageChange);
+    window.addEventListener("focus", checkAnnotationPageChange);
+    document.addEventListener("visibilitychange", checkAnnotationPageChange);
+    window.setInterval(() => {
+      if (!document.hidden && location.href !== lastKnownHref) checkAnnotationPageChange();
+    }, 1000);
     shadow.addEventListener("click", handleShadowClick);
     shadow.addEventListener("keydown", handleShadowKeydown);
     shadow.addEventListener("input", handleShadowInput);
     shadow.addEventListener("mousedown", handleDragStart);
     shadow.addEventListener("mouseup", updateSelectionActions);
     shadow.addEventListener("keyup", updateSelectionActions);
+    shadow.addEventListener("focusout", handleShadowFocusOut);
     bubble.addEventListener("pointerdown", handleBubblePointerDown);
     bubble.addEventListener("pointerup", handleBubblePointerUp);
     bubble.addEventListener("pointerleave", cancelBubblePress);
     bubble.addEventListener("pointercancel", cancelBubblePress);
+    annotationBasket.addEventListener("dragstart", handleAnnotationBasketDragStart);
+    annotationBasket.addEventListener("dragend", endAnnotationDrag);
 
     chrome.storage.onChanged.addListener(handleStorageChange);
     chrome.runtime.onMessage.addListener((message) => {
@@ -630,9 +754,18 @@
       memories = changes[STORAGE_KEYS.memories].newValue || {};
       scheduleHighlight();
     }
+    if (changes[STORAGE_KEYS.annotationBatches]) {
+      annotationBatches = changes[STORAGE_KEYS.annotationBatches].newValue || {};
+      void loadActiveAnnotationBatch();
+    }
+    if (changes[STORAGE_KEYS.activeAnnotationBatches]) {
+      activeAnnotationBatches = changes[STORAGE_KEYS.activeAnnotationBatches].newValue || {};
+      void loadActiveAnnotationBatch();
+    }
   }
 
   function handleSelection() {
+    checkAnnotationPageChange();
     const selection = window.getSelection();
     if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
       hideBubble();
@@ -663,6 +796,7 @@
       rect: rectToObject(rect),
       range: range.cloneRange(),
       context: extractSelectionContext(range, term),
+      annotationContext: extractSelectionContext(range, term, true),
       sourceUrl: currentPageUrl(),
       pageTitle: document.title || location.href,
       siteHost: location.hostname,
@@ -682,6 +816,17 @@
     const memoryMark = target?.closest ? target.closest(MEMORY_SELECTOR) : null;
 
     if (!memoryMark) {
+      const selection = window.getSelection();
+      if (!selection || selection.isCollapsed) {
+        const hit = annotationRectCache.find((entry) => entry.rects.some((rect) =>
+          event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom
+        ));
+        if (hit) {
+          event.preventDefault();
+          event.stopPropagation();
+          openAnnotationPanel(hit.annotationId);
+        }
+      }
       return;
     }
 
@@ -741,18 +886,46 @@
       deleteMemoryCard(button.dataset.memoryId, button.dataset.cardId);
     } else if (action === "open-hover-memory") {
       openHoverMemory();
+    } else if (action === "save-annotation") {
+      saveAnnotationFromPanel();
+    } else if (action === "open-annotation-basket") {
+      if (!annotationInteraction?.dragged) openAnnotationPanel();
+    } else if (action === "edit-annotation") {
+      renderAnnotationPanel(button.dataset.annotationId);
+    } else if (action === "delete-annotation") {
+      deleteAnnotation(button.dataset.annotationId);
+    } else if (action === "copy-annotation-batch") {
+      copyAnnotationBatchManually();
+    } else if (action === "close-annotation-panel") {
+      closePanel();
     }
   }
 
   function handleShadowKeydown(event) {
     if (event.key === "Escape") {
       event.preventDefault();
+      closePanel();
+      return;
+    }
+
+    if (event.key === "Enter" && event.target?.matches?.(".annotation-edit-area")) {
+      if (event.metaKey || event.ctrlKey) {
+        event.preventDefault();
+        saveAnnotationEdit(event.target.dataset.annotationEdit, { rerender: true });
+      }
       return;
     }
 
     if (event.key === "Enter" && !event.shiftKey && event.target?.matches?.("textarea")) {
       event.preventDefault();
       sendQuestion({ followup: Boolean(panelState?.currentCard) });
+    }
+  }
+
+  function handleShadowFocusOut(event) {
+    const editor = event.target?.matches?.(".annotation-edit-area") ? event.target : null;
+    if (editor && panelState?.editingAnnotationId === editor.dataset.annotationEdit) {
+      saveAnnotationEdit(editor.dataset.annotationEdit, { rerender: false });
     }
   }
 
@@ -881,7 +1054,11 @@
       pointerId: event.pointerId,
       longPressOpened: false
     };
-    bubble.setPointerCapture?.(event.pointerId);
+    try {
+      bubble.setPointerCapture?.(event.pointerId);
+    } catch (_) {
+      // Synthetic pointer events and a few embedded browsers do not establish capture.
+    }
 
     const rect = bubble.getBoundingClientRect();
     bubble.classList.add("press-hold");
@@ -1163,8 +1340,9 @@
     panelState.mode = "inputReady";
     panel.className = panelClass();
     panel.innerHTML = surfaceShell(panelState.term, "", `
-      <div class="prompt-composer">
-        <textarea id="inlineai-question" aria-label="${escapeHtml(t("content.customQuestionAria", currentLanguage()))}" placeholder="${escapeHtml(t("content.askPlaceholder", currentLanguage()))}" rows="1"></textarea>
+      <div class="prompt-composer annotation-enabled">
+        <textarea id="inlineai-question" maxlength="${LIMITS.maxAnnotationNoteLength}" aria-label="${escapeHtml(t("content.customQuestionAria", currentLanguage()))}" placeholder="${escapeHtml(t("content.askPlaceholder", currentLanguage()))}" rows="1"></textarea>
+        <button class="button annotation-action" type="button" data-action="save-annotation">${escapeHtml(t("content.annotation", currentLanguage()))}</button>
         <button class="button send-round" type="button" data-action="send-new" title="${escapeHtml(t("content.send", currentLanguage()))}" aria-label="${escapeHtml(t("content.send", currentLanguage()))}">↑</button>
       </div>
       <div id="inlineai-error" class="notice error hidden"></div>
@@ -1931,8 +2109,8 @@
     return rect.width > 0 && rect.height > 0 ? rect : null;
   }
 
-  function extractSelectionContext(range, term) {
-    if (!settings.includePageContext) {
+  function extractSelectionContext(range, term, force) {
+    if (!force && !settings.includePageContext) {
       return null;
     }
 
@@ -2087,6 +2265,9 @@
     if (panel) {
       panel.setAttribute("aria-label", t("app.dialogLabel", currentLanguage()));
     }
+    if (activeAnnotationBatch) {
+      renderAnnotationBasket(false);
+    }
   }
 
   function renderMarkdown(text) {
@@ -2177,6 +2358,464 @@
     return (right || []).some((item) => leftSet.has(String(item).toLowerCase()));
   }
 
+  function annotationPageKey() {
+    return A.pageKeyFor(location);
+  }
+
+  async function loadActiveAnnotationBatch() {
+    const id = activeAnnotationBatches[annotationPageKey()];
+    activeAnnotationBatch = id && annotationBatches[id] ? A.normalizeBatch(annotationBatches[id]) : null;
+    annotationRanges.clear();
+    if (activeAnnotationBatch?.items?.length) {
+      for (const item of activeAnnotationBatch.items) {
+        const restored = AR.restoreAnchor(item.anchor);
+        if (restored.range) annotationRanges.set(item.id, restored.range);
+        item.anchorState = restored.range ? "ready" : "missing";
+        item.matchCount = Math.max(item.matchCount || 1, restored.matchCount || 0);
+      }
+      bindAnnotationObservers();
+      renderAnnotationBasket(false);
+      scheduleAnnotationHighlights();
+    } else {
+      clearAnnotationUi();
+    }
+  }
+
+  async function saveActiveAnnotationBatch() {
+    if (!activeAnnotationBatch) return;
+    activeAnnotationBatch = A.normalizeBatch(activeAnnotationBatch);
+    activeAnnotationBatch.updatedAt = Date.now();
+    annotationBatches[activeAnnotationBatch.id] = activeAnnotationBatch;
+    if (!A.canTransition(activeAnnotationBatch.status, A.STATUS.collecting) &&
+        [A.STATUS.injected, A.STATUS.copiedManual, A.STATUS.pastedAfterFallback].includes(activeAnnotationBatch.status)) {
+      delete activeAnnotationBatches[activeAnnotationBatch.pageKey];
+    } else {
+      activeAnnotationBatches[activeAnnotationBatch.pageKey] = activeAnnotationBatch.id;
+    }
+    await chrome.storage.local.set({
+      [STORAGE_KEYS.annotationBatches]: annotationBatches,
+      [STORAGE_KEYS.activeAnnotationBatches]: activeAnnotationBatches
+    });
+    syncAnnotationPasteListeners();
+  }
+
+  async function saveAnnotationFromPanel() {
+    const input = shadow.getElementById("inlineai-question");
+    const note = String(input?.value || "").trim();
+    if (!note) return showError(t("content.annotationNeedNote", currentLanguage()));
+    if (!selectionState?.range || selectionState.term.length > LIMITS.maxAnnotationSelectionLength) {
+      return showError(t("content.annotationSelectionTooLong", currentLanguage()));
+    }
+    if (note.length > LIMITS.maxAnnotationNoteLength) return showError(t("content.annotationTooLong", currentLanguage()));
+    if (activeAnnotationBatch?.items?.length >= LIMITS.maxAnnotationsPerBatch) {
+      return showError(t("content.annotationLimit", currentLanguage()));
+    }
+
+    const pageKey = annotationPageKey();
+    if (!activeAnnotationBatch || activeAnnotationBatch.pageKey !== pageKey) {
+      activeAnnotationBatch = A.createBatch({
+        pageKey,
+        pageUrl: location.href,
+        pageTitle: document.title || location.href,
+        siteHost: location.hostname
+      });
+    }
+    if (activeAnnotationBatch.status === A.STATUS.copiedPendingPaste) activeAnnotationBatch = A.resetAfterEdit(activeAnnotationBatch);
+    const now = Date.now();
+    const item = A.normalizeItem({
+      id: A.createId("annotation"),
+      quote: selectionState.term,
+      note,
+      context: selectionState.annotationContext,
+      anchor: AR.createAnchor(selectionState.range, selectionState.term),
+      order: activeAnnotationBatch.items.length,
+      createdAt: now,
+      updatedAt: now
+    }, activeAnnotationBatch.items.length);
+    activeAnnotationBatch.items.push(item);
+    annotationRanges.set(item.id, selectionState.range.cloneRange());
+    await saveActiveAnnotationBatch();
+    closePanel();
+    hideBubble();
+    window.getSelection()?.removeAllRanges();
+    bindAnnotationObservers();
+    scheduleAnnotationHighlights();
+    renderAnnotationBasket(true);
+  }
+
+  function renderAnnotationBasket(expanded) {
+    if (!activeAnnotationBatch?.items?.length) return clearAnnotationUi();
+    const count = activeAnnotationBatch.items.length;
+    const copied = activeAnnotationBatch.status === A.STATUS.copiedPendingPaste;
+    annotationBasket.classList.remove("hidden", "dragging");
+    annotationBasket.classList.toggle("compact", !expanded);
+    annotationBasket.classList.toggle("copied", copied);
+    annotationBasket.textContent = copied
+      ? t("content.annotationCopied", currentLanguage())
+      : expanded
+        ? t("content.annotationSaved", { count }, currentLanguage())
+        : String(count);
+    annotationBasket.setAttribute("aria-label", t("content.annotationBasketAria", { count }, currentLanguage()));
+    window.clearTimeout(annotationBasketTimer);
+    if (expanded && !copied) {
+      annotationBasketTimer = window.setTimeout(() => renderAnnotationBasket(false), 4000);
+    }
+  }
+
+  function openAnnotationPanel(annotationId) {
+    if (!activeAnnotationBatch?.items?.length) return;
+    panelState = { mode: "annotations", editingAnnotationId: annotationId || "", collapsed: false };
+    renderAnnotationPanel(annotationId || "");
+    showPanel({ left: Math.max(12, innerWidth - 560), right: innerWidth - 16, top: Math.max(24, innerHeight - 500), bottom: innerHeight - 24, width: 520, height: 32 });
+  }
+
+  function renderAnnotationPanel(editingId) {
+    if (!activeAnnotationBatch) return closePanel();
+    const items = A.sortItems(activeAnnotationBatch.items);
+    const info = A.payloadInfo(activeAnnotationBatch, currentLanguage());
+    panelState = { mode: "annotations", editingAnnotationId: editingId || "", collapsed: false };
+    const cards = items.map((item) => {
+      const editing = item.id === editingId;
+      const preview = annotationPreviewParts(item);
+      return `<article class="annotation-card" data-annotation-id="${escapeHtml(item.id)}">
+        <button class="annotation-delete" type="button" data-action="delete-annotation" data-annotation-id="${escapeHtml(item.id)}" aria-label="${escapeHtml(t("content.annotationDelete", currentLanguage()))}">×</button>
+        <blockquote class="annotation-quote"><span>${escapeHtml(preview.before)}</span><strong>${escapeHtml(item.quote)}</strong><span>${escapeHtml(preview.after)}</span>${item.anchorState === "missing" ? `<small class="annotation-location-note">${escapeHtml(t("content.annotationAnchorMissing", currentLanguage()))}</small>` : ""}</blockquote>
+        ${editing ? `<textarea class="annotation-edit-area" data-annotation-edit="${escapeHtml(item.id)}" maxlength="${LIMITS.maxAnnotationNoteLength}" aria-label="${escapeHtml(t("content.annotationEdit", currentLanguage()))}">${escapeHtml(item.note)}</textarea>` : `<button class="annotation-note-button" type="button" data-action="edit-annotation" data-annotation-id="${escapeHtml(item.id)}">${escapeHtml(item.note)}</button>`}
+      </article>`;
+    }).join("");
+    panel.className = panelClass();
+    panel.innerHTML = surfaceShell(t("content.annotationPanelTitle", { count: items.length }, currentLanguage()), "", `
+      ${info.tooLong ? `<div class="notice error">${escapeHtml(t("content.annotationTooLong", currentLanguage()))}</div>` : ""}
+      <div class="annotation-list">${cards}</div>
+      <div class="annotation-footer"><button class="button primary" type="button" data-action="copy-annotation-batch" ${info.tooLong ? "disabled" : ""}>${escapeHtml(t("content.annotationCopyAll", currentLanguage()))}</button></div>
+    `, { closeAction: "close-annotation-panel" });
+    if (editingId) window.setTimeout(() => {
+      const editor = findAnnotationEditArea(editingId);
+      editor?.focus();
+      editor?.setSelectionRange?.(editor.value.length, editor.value.length);
+    }, 0);
+  }
+
+  function annotationPreviewParts(item) {
+    const sideLimit = 44;
+    const rawBefore = A.normalizeText(item.context?.before || "");
+    const rawAfter = A.normalizeText(item.context?.after || "");
+    const before = rawBefore.length > sideLimit ? `…${rawBefore.slice(-sideLimit)}` : rawBefore;
+    const after = rawAfter.length > sideLimit ? `${rawAfter.slice(0, sideLimit)}…` : rawAfter;
+    return {
+      before: before ? `${before} ` : "",
+      after: after ? ` ${after}` : ""
+    };
+  }
+
+  async function saveAnnotationEdit(id, { rerender = true } = {}) {
+    const item = activeAnnotationBatch?.items.find((entry) => entry.id === id);
+    const textarea = findAnnotationEditArea(id);
+    const note = String(textarea?.value || "").trim();
+    if (!item || !note) return showToast(t("content.annotationNeedNote", currentLanguage()));
+    item.note = note.slice(0, LIMITS.maxAnnotationNoteLength);
+    item.updatedAt = Date.now();
+    const wasPending = activeAnnotationBatch.status === A.STATUS.copiedPendingPaste;
+    activeAnnotationBatch = A.resetAfterEdit(activeAnnotationBatch);
+    await saveActiveAnnotationBatch();
+    if (rerender && activeAnnotationBatch) renderAnnotationPanel("");
+    renderAnnotationBasket(true);
+    if (wasPending) showToast(t("content.annotationChangedAfterCopy", currentLanguage()));
+  }
+
+  function findAnnotationEditArea(id) {
+    return Array.from(panel?.querySelectorAll?.("[data-annotation-edit]") || [])
+      .find((element) => element.dataset.annotationEdit === id) || null;
+  }
+
+  async function deleteAnnotation(id) {
+    if (!activeAnnotationBatch) return;
+    activeAnnotationBatch.items = activeAnnotationBatch.items.filter((item) => item.id !== id);
+    annotationRanges.delete(id);
+    if (!activeAnnotationBatch.items.length) {
+      delete annotationBatches[activeAnnotationBatch.id];
+      delete activeAnnotationBatches[activeAnnotationBatch.pageKey];
+      activeAnnotationBatch = null;
+      await chrome.storage.local.set({ [STORAGE_KEYS.annotationBatches]: annotationBatches, [STORAGE_KEYS.activeAnnotationBatches]: activeAnnotationBatches });
+      closePanel();
+      clearAnnotationUi();
+      showToast(t("content.annotationEmptyAfterDelete", currentLanguage()));
+      return;
+    }
+    activeAnnotationBatch.items = A.sortItems(activeAnnotationBatch.items);
+    activeAnnotationBatch = A.resetAfterEdit(activeAnnotationBatch);
+    await saveActiveAnnotationBatch();
+    renderAnnotationPanel("");
+    renderAnnotationBasket(true);
+    scheduleAnnotationHighlights();
+  }
+
+  function bindAnnotationObservers() {
+    if (annotationObserver || !activeAnnotationBatch) return;
+    bindAnnotationViewportListeners();
+    syncAnnotationPasteListeners();
+    annotationObserver = new MutationObserver(scheduleAnnotationHighlights);
+    annotationObserver.observe(document.body, { childList: true, subtree: true });
+    if (globalThis.ResizeObserver) {
+      annotationResizeObserver = new ResizeObserver(scheduleAnnotationHighlights);
+      annotationResizeObserver.observe(document.documentElement);
+    }
+  }
+
+  function scheduleAnnotationHighlights() {
+    if (!activeAnnotationBatch || annotationFrame) return;
+    annotationFrame = requestAnimationFrame(() => {
+      annotationFrame = 0;
+      renderAnnotationHighlights();
+    });
+  }
+
+  function renderAnnotationHighlights() {
+    if (!activeAnnotationBatch) return clearAnnotationUi();
+    annotationHighlightLayer.innerHTML = "";
+    annotationRectCache = [];
+    for (const item of activeAnnotationBatch.items) {
+      let range = annotationRanges.get(item.id);
+      if (!range || !range.startContainer?.isConnected || A.comparableText(range.toString()) !== A.comparableText(item.quote)) {
+        const restored = AR.restoreAnchor(item.anchor);
+        range = restored.range;
+        item.anchorState = range ? "ready" : "missing";
+        item.matchCount = Math.max(item.matchCount || 1, restored.matchCount || 0);
+        if (range) annotationRanges.set(item.id, range);
+      }
+      if (!range) continue;
+      const rects = Array.from(range.getClientRects()).filter((rect) => rect.width > 1 && rect.height > 1).map(rectToObject);
+      annotationRectCache.push({ annotationId: item.id, rects });
+      rects.forEach((rect) => {
+        const mark = document.createElement("span");
+        mark.className = "annotation-highlight";
+        mark.style.cssText = `left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;height:${rect.height}px;`;
+        annotationHighlightLayer.appendChild(mark);
+      });
+    }
+  }
+
+  function clearAnnotationUi() {
+    window.clearTimeout(annotationBasketTimer);
+    annotationBasket?.classList.add("hidden");
+    annotationHighlightLayer && (annotationHighlightLayer.innerHTML = "");
+    editorDropTarget?.classList.add("hidden");
+    annotationRectCache = [];
+    annotationObserver?.disconnect();
+    annotationObserver = null;
+    annotationResizeObserver?.disconnect();
+    annotationResizeObserver = null;
+    unbindAnnotationViewportListeners();
+    unbindAnnotationDragListeners();
+    unbindAnnotationPasteListeners();
+  }
+
+  function handleAnnotationViewportChange() {
+    hideHistoryHint();
+    scheduleAnnotationHighlights();
+  }
+
+  function bindAnnotationViewportListeners() {
+    if (annotationViewportListenersBound) return;
+    document.addEventListener("scroll", handleAnnotationViewportChange, true);
+    window.addEventListener("resize", handleAnnotationViewportChange, { passive: true });
+    annotationViewportListenersBound = true;
+  }
+
+  function unbindAnnotationViewportListeners() {
+    if (!annotationViewportListenersBound) return;
+    document.removeEventListener("scroll", handleAnnotationViewportChange, true);
+    window.removeEventListener("resize", handleAnnotationViewportChange);
+    annotationViewportListenersBound = false;
+  }
+
+  function bindAnnotationDragListeners() {
+    if (annotationDragListenersBound) return;
+    document.addEventListener("dragover", handleAnnotationDragOver, true);
+    document.addEventListener("drop", handleAnnotationDrop, true);
+    document.addEventListener("dragend", endAnnotationDrag, true);
+    annotationDragListenersBound = true;
+  }
+
+  function unbindAnnotationDragListeners() {
+    if (!annotationDragListenersBound) return;
+    document.removeEventListener("dragover", handleAnnotationDragOver, true);
+    document.removeEventListener("drop", handleAnnotationDrop, true);
+    document.removeEventListener("dragend", endAnnotationDrag, true);
+    annotationDragListenersBound = false;
+  }
+
+  function syncAnnotationPasteListeners() {
+    if (activeAnnotationBatch?.status === A.STATUS.copiedPendingPaste) {
+      if (annotationPasteListenersBound) return;
+      document.addEventListener("paste", handleAnnotationPaste, true);
+      document.addEventListener("beforeinput", handleAnnotationBeforeInput, true);
+      document.addEventListener("input", handleAnnotationInput, true);
+      annotationPasteListenersBound = true;
+      return;
+    }
+    unbindAnnotationPasteListeners();
+  }
+
+  function unbindAnnotationPasteListeners() {
+    if (!annotationPasteListenersBound) return;
+    document.removeEventListener("paste", handleAnnotationPaste, true);
+    document.removeEventListener("beforeinput", handleAnnotationBeforeInput, true);
+    document.removeEventListener("input", handleAnnotationInput, true);
+    annotationPasteListenersBound = false;
+    pendingPasteSignal = null;
+  }
+
+  async function checkAnnotationPageChange() {
+    if (location.href === lastKnownHref) return;
+    lastKnownHref = location.href;
+    if (activeAnnotationBatch) await saveActiveAnnotationBatch();
+    clearAnnotationUi();
+    await loadActiveAnnotationBatch();
+  }
+
+  function handleAnnotationBasketDragStart(event) {
+    if (!activeAnnotationBatch) return event.preventDefault();
+    const info = A.payloadInfo(activeAnnotationBatch, currentLanguage());
+    if (info.tooLong) {
+      event.preventDefault();
+      showToast(t("content.annotationTooLong", currentLanguage()));
+      return;
+    }
+    annotationInteraction = { startedAt: Date.now(), dragged: true, payload: info.text, payloadHash: info.hash };
+    bindAnnotationDragListeners();
+    event.dataTransfer.setData("text/plain", info.text);
+    event.dataTransfer.effectAllowed = "copy";
+    const ghost = document.createElement("div");
+    ghost.textContent = `${activeAnnotationBatch.items.length}`;
+    ghost.style.cssText = "position:fixed;top:-100px;width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:#1d4ed8;color:white;font:bold 15px sans-serif;";
+    document.body.appendChild(ghost);
+    event.dataTransfer.setDragImage(ghost, 22, 22);
+    setTimeout(() => ghost.remove(), 0);
+    annotationBasket.classList.add("dragging");
+  }
+
+  function handleAnnotationDragOver(event) {
+    if (!annotationInteraction?.dragged) return;
+    const found = AR.editorAtPoint(event.clientX, event.clientY);
+    if (!found) {
+      annotationDropEditor = null;
+      editorDropTarget.classList.add("hidden");
+      return;
+    }
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+    annotationDropEditor = found;
+    const rect = found.root.getBoundingClientRect();
+    editorDropTarget.style.cssText = `left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;height:${rect.height}px;`;
+    editorDropTarget.querySelector("span").textContent = t("content.annotationDrop", { count: activeAnnotationBatch.items.length }, currentLanguage());
+    editorDropTarget.classList.remove("hidden");
+  }
+
+  async function handleAnnotationDrop(event) {
+    if (!annotationInteraction?.dragged || !annotationDropEditor || !activeAnnotationBatch) return;
+    event.preventDefault();
+    const found = annotationDropEditor;
+    const payload = annotationInteraction.payload;
+    activeAnnotationBatch = A.transitionBatch(activeAnnotationBatch, A.STATUS.injecting, {
+      delivery: { method: "drag", payloadHash: annotationInteraction.payloadHash, failureReason: "" }
+    });
+    await saveActiveAnnotationBatch();
+    const result = await AR.injectAndVerify(found, payload);
+    if (result.ok) {
+      activeAnnotationBatch = A.transitionBatch(activeAnnotationBatch, A.STATUS.injected, { delivery: { method: "drag" } });
+      await completeAnnotationBatch(t("content.annotationInserted", currentLanguage()));
+    } else {
+      await fallbackCopyAnnotation(payload, `verification_failed:${result.adapterId}`);
+    }
+    endAnnotationDrag();
+  }
+
+  function endAnnotationDrag() {
+    annotationBasket?.classList.remove("dragging");
+    editorDropTarget?.classList.add("hidden");
+    annotationDropEditor = null;
+    unbindAnnotationDragListeners();
+    if (annotationInteraction) setTimeout(() => { annotationInteraction = null; }, 80);
+  }
+
+  async function fallbackCopyAnnotation(payload, reason) {
+    const copied = await AR.copyTextToClipboard(payload);
+    if (copied.ok) {
+      activeAnnotationBatch = A.transitionBatch(activeAnnotationBatch, A.STATUS.copiedPendingPaste, {
+        delivery: { method: "clipboard_fallback", payloadHash: A.hashText(payload), failureReason: reason }
+      });
+      await saveActiveAnnotationBatch();
+      syncAnnotationPasteListeners();
+      renderAnnotationBasket(true);
+      showToast(t("content.annotationFallbackCopied", currentLanguage()));
+    } else {
+      activeAnnotationBatch = A.transitionBatch(activeAnnotationBatch, A.STATUS.collecting, { delivery: { failureReason: String(copied.error || reason) } });
+      await saveActiveAnnotationBatch();
+      syncAnnotationPasteListeners();
+      renderAnnotationBasket(true);
+      showToast(t("content.annotationFallbackFailed", currentLanguage()));
+    }
+  }
+
+  async function copyAnnotationBatchManually() {
+    if (!activeAnnotationBatch) return;
+    const visibleEditor = panel?.querySelector?.(".annotation-edit-area");
+    if (visibleEditor) await saveAnnotationEdit(visibleEditor.dataset.annotationEdit, { rerender: false });
+    if (!activeAnnotationBatch) return;
+    const info = A.payloadInfo(activeAnnotationBatch, currentLanguage());
+    if (info.tooLong) return showToast(t("content.annotationTooLong", currentLanguage()));
+    const copied = await AR.copyTextToClipboard(info.text);
+    if (!copied.ok) return showToast(t("content.annotationCopyFailed", currentLanguage()));
+    activeAnnotationBatch = A.transitionBatch(activeAnnotationBatch, A.STATUS.copiedManual, {
+      delivery: { method: "clipboard_manual", payloadHash: info.hash, failureReason: "" }
+    });
+    const found = AR.likelyEditor();
+    await completeAnnotationBatch(found ? t("content.annotationPasteHere", currentLanguage()) : t("content.annotationPasteToAi", currentLanguage()));
+  }
+
+  async function completeAnnotationBatch(message) {
+    const completed = activeAnnotationBatch;
+    await saveActiveAnnotationBatch();
+    delete activeAnnotationBatches[completed.pageKey];
+    await chrome.storage.local.set({ [STORAGE_KEYS.activeAnnotationBatches]: activeAnnotationBatches });
+    activeAnnotationBatch = null;
+    annotationRanges.clear();
+    closePanel();
+    clearAnnotationUi();
+    showToast(`${message} ${t("content.annotationHistoryHint", currentLanguage())}`);
+  }
+
+  function handleAnnotationPaste(event) {
+    if (activeAnnotationBatch?.status !== A.STATUS.copiedPendingPaste) return;
+    const pastedText = event.clipboardData?.getData("text/plain") || "";
+    pendingPasteSignal = { target: event.target, pastedText, pasteEvent: true, inputType: "insertFromPaste", at: Date.now() };
+    setTimeout(checkPendingAnnotationPaste, 0);
+  }
+
+  function handleAnnotationBeforeInput(event) {
+    if (activeAnnotationBatch?.status !== A.STATUS.copiedPendingPaste || event.inputType !== "insertFromPaste") return;
+    pendingPasteSignal = { target: event.target, pastedText: event.data || pendingPasteSignal?.pastedText || "", pasteEvent: Boolean(pendingPasteSignal?.pasteEvent), inputType: event.inputType, at: Date.now() };
+  }
+
+  function handleAnnotationInput(event) {
+    if (activeAnnotationBatch?.status !== A.STATUS.copiedPendingPaste || event.inputType !== "insertFromPaste") return;
+    if (pendingPasteSignal) pendingPasteSignal.target = event.target;
+    setTimeout(checkPendingAnnotationPaste, 0);
+  }
+
+  async function checkPendingAnnotationPaste() {
+    if (!pendingPasteSignal || !activeAnnotationBatch || Date.now() - pendingPasteSignal.at > 1500) return;
+    const found = AR.findAdapter(pendingPasteSignal.target);
+    if (!found) return;
+    const payload = A.formatAnnotationBatch(activeAnnotationBatch, currentLanguage());
+    const editorText = found.adapter.readText(found.root);
+    if (!A.matchesPayload({ payload, pastedText: pendingPasteSignal.pastedText, editorText, inputType: pendingPasteSignal.inputType, pasteEvent: pendingPasteSignal.pasteEvent })) return;
+    activeAnnotationBatch = A.transitionBatch(activeAnnotationBatch, A.STATUS.pastedAfterFallback, { delivery: { method: "paste_after_fallback" } });
+    pendingPasteSignal = null;
+    await completeAnnotationBatch(t("content.annotationPasteComplete", currentLanguage()));
+  }
+
   function rectToObject(rect) {
     return {
       left: rect.left,
@@ -2197,7 +2836,7 @@
   }
 
   function isSelectableTerm(term) {
-    if (!term || term.length > LIMITS.maxSelectionLength) {
+    if (!term || term.length > LIMITS.maxAnnotationSelectionLength) {
       return false;
     }
     if (/[\u3400-\u9fff]/.test(term)) {

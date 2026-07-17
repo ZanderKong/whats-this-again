@@ -1,0 +1,8 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>批注功能测试页</title>
+<style>body{max-width:900px;margin:40px auto;padding:0 20px;font:17px/1.75 Georgia,"Songti SC",serif;color:#20201d;background:#fffdf7}section{margin:24px 0;padding:20px;border:1px solid #d9d3c5;border-radius:10px}textarea,[contenteditable],[role=textbox],input{display:block;width:100%;min-height:70px;margin:10px 0;padding:10px;box-sizing:border-box}button{padding:8px 12px}</style></head>
+<body><h1>「这是啥来着」批注测试场</h1>
+<section id="article"><p>第一版暂时不做账号系统。需要在两周内完成第一版，并重新安排任务顺序。</p><p>这是一句重复句子。这里有一些间隔文字。这是一句重复句子。</p><p>动态内容用于验证回答重新渲染后，文本锚点能恢复到正确位置。</p></section>
+<section><label>普通 textarea<textarea id="empty"></textarea></label><label>已有文字 textarea<textarea id="filled">已有草稿文字。</textarea></label><div contenteditable="true" role="textbox" aria-label="Contenteditable editor">可编辑内容：</div><div role="textbox" contenteditable="true" aria-label="Role textbox">Role textbox：</div><input readonly value="只读输入框"><input type="search" placeholder="搜索干扰项"></section>
+<button id="replace">动态替换文章 DOM</button> <button id="spa">模拟 SPA URL 变化</button>
+<script>document.querySelector('#replace').onclick=()=>{const old=document.querySelector('#article');const next=old.cloneNode(true);old.replaceWith(next)};document.querySelector('#spa').onclick=()=>{history.pushState({},'',`?conversation=${Date.now()}`);dispatchEvent(new PopStateEvent('popstate'))}</script></body></html>

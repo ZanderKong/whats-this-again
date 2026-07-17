@@ -1,5 +1,6 @@
 (function inlineAiHistory() {
   const C = globalThis.InlineAIConstants;
+  const A = globalThis.InlineAIAnnotations;
   const {
     STORAGE_KEYS,
     MESSAGE_TYPES,
@@ -17,12 +18,18 @@
     list: document.getElementById("history-list"),
     openOptions: document.getElementById("open-options")
   };
+  els.heading = document.getElementById("history-heading");
+  els.scopeWrap = document.getElementById("scope-filter-wrap");
+  els.tabs = Array.from(document.querySelectorAll("[data-tab]"));
 
   let memories = {};
   let settings = mergeSettings();
   let activePageUrl = "";
   let activeHost = "";
   let groups = [];
+  let annotationBatches = {};
+  let activeAnnotationBatches = {};
+  let currentTab = "explanations";
   const expandedTerms = new Set();
 
   init().catch((error) => {
@@ -32,6 +39,7 @@
   async function init() {
     await ensureStorageSchema(chrome.storage.local);
     const params = new URLSearchParams(location.search);
+    currentTab = params.get("tab") === "annotations" ? "annotations" : "explanations";
     activePageUrl = params.get("page") || "";
     activeHost = params.get("host") || "";
     const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true }).catch(() => []);
@@ -39,15 +47,18 @@
     activePageUrl = activePageUrl || (activeUrl ? `${activeUrl.origin}${activeUrl.pathname}${activeUrl.search}` : "");
     activeHost = activeHost || activeUrl?.hostname || "";
 
-    const stored = await chrome.storage.local.get([STORAGE_KEYS.settings, STORAGE_KEYS.memories]);
+    const stored = await chrome.storage.local.get([STORAGE_KEYS.settings, STORAGE_KEYS.memories, STORAGE_KEYS.annotationBatches, STORAGE_KEYS.activeAnnotationBatches]);
     settings = mergeSettings(stored[STORAGE_KEYS.settings]);
     memories = stored[STORAGE_KEYS.memories] || {};
+    annotationBatches = stored[STORAGE_KEYS.annotationBatches] || {};
+    activeAnnotationBatches = stored[STORAGE_KEYS.activeAnnotationBatches] || {};
     applyPageLanguage();
 
     els.search.addEventListener("input", render);
     els.scopeFilter.addEventListener("change", render);
     els.openOptions.addEventListener("click", () => chrome.runtime.openOptionsPage());
     els.list.addEventListener("click", handleListClick);
+    els.tabs.forEach((button) => button.addEventListener("click", () => switchTab(button.dataset.tab)));
 
     chrome.storage.onChanged.addListener((changes, areaName) => {
       if (areaName !== "local") {
@@ -62,12 +73,21 @@
         applyPageLanguage();
         render();
       }
+      if (changes[STORAGE_KEYS.annotationBatches]) {
+        annotationBatches = changes[STORAGE_KEYS.annotationBatches].newValue || {};
+        render();
+      }
+      if (changes[STORAGE_KEYS.activeAnnotationBatches]) {
+        activeAnnotationBatches = changes[STORAGE_KEYS.activeAnnotationBatches].newValue || {};
+      }
     });
 
     render();
   }
 
   function render() {
+    renderTabChrome();
+    if (currentTab === "annotations") return renderAnnotations();
     groups = filterGroups(buildGroups());
     const answerCount = groups.reduce((sum, group) => sum + group.cards.length, 0);
     els.summary.textContent = t("history.summary", { terms: groups.length, answers: answerCount }, currentLanguage());
@@ -78,6 +98,62 @@
     }
 
     els.list.innerHTML = groups.map(renderGroup).join("");
+  }
+
+  function switchTab(tab) {
+    currentTab = tab === "annotations" ? "annotations" : "explanations";
+    const url = new URL(location.href);
+    if (currentTab === "annotations") url.searchParams.set("tab", "annotations");
+    else url.searchParams.delete("tab");
+    history.replaceState(null, "", url);
+    render();
+  }
+
+  function renderTabChrome() {
+    els.tabs.forEach((button) => {
+      const active = button.dataset.tab === currentTab;
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-current", active ? "page" : "false");
+    });
+    els.scopeWrap.classList.toggle("hidden", currentTab === "annotations");
+    els.heading.textContent = t(currentTab === "annotations" ? "history.annotationHeading" : "history.heading", currentLanguage());
+    els.search.placeholder = t(currentTab === "annotations" ? "history.annotationSearchPlaceholder" : "history.searchPlaceholder", currentLanguage());
+  }
+
+  function renderAnnotations() {
+    const query = normalize(els.search.value).toLowerCase();
+    groups = Object.values(annotationBatches).map(A.normalizeBatch)
+      .filter((batch) => !query || annotationSearchText(batch).includes(query))
+      .sort((left, right) => (right.updatedAt || right.createdAt) - (left.updatedAt || left.createdAt));
+    const count = groups.reduce((sum, batch) => sum + batch.items.length, 0);
+    els.summary.textContent = t("history.annotationSummary", { batches: groups.length, items: count }, currentLanguage());
+    if (!groups.length) {
+      els.list.innerHTML = `<p class="empty">${escapeHtml(t("history.annotationEmpty", currentLanguage()))}</p>`;
+      return;
+    }
+    els.list.innerHTML = groups.map(renderAnnotationBatch).join("");
+  }
+
+  function renderAnnotationBatch(batch) {
+    const expanded = expandedTerms.has(batch.id);
+    const payload = A.formatAnnotationBatch(batch, currentLanguage());
+    return `<article class="memory${expanded ? " expanded" : ""}" data-batch-id="${escapeHtml(batch.id)}">
+      <header class="memory-header"><div>
+        <h3 class="term">${escapeHtml(batch.pageTitle || batch.siteHost || batch.pageUrl)}</h3>
+        <p class="summary-text">${escapeHtml(snippet(payload, expanded ? 2000 : 280))}</p>
+        <p class="meta"><span>${escapeHtml(batch.siteHost || t("history.unknownSite", currentLanguage()))}</span><span>${escapeHtml(formatDateTime(batch.updatedAt || batch.createdAt))}</span><span class="badge">${escapeHtml(t(A.statusLabelKey(batch.status), currentLanguage()))}</span><span>${batch.items.length}</span></p>
+      </div><div class="actions">
+        <button class="button" type="button" data-action="copy-annotation">${escapeHtml(t("history.copy", currentLanguage()))}</button>
+        <button class="button" type="button" data-action="open-annotation-source">${escapeHtml(t("history.openSource", currentLanguage()))}</button>
+        <button class="button" type="button" data-action="toggle-annotation">${escapeHtml(expanded ? t("history.collapse", currentLanguage()) : t("history.expand", currentLanguage()))}</button>
+        <button class="button danger" type="button" data-action="delete-annotation-batch">${escapeHtml(t("history.delete", currentLanguage()))}</button>
+      </div></header>
+      ${expanded ? `<div class="annotation-items">${batch.items.map((item, index) => `<article class="annotation-item"><strong>${index + 1}</strong><blockquote>${escapeHtml(item.quote)}</blockquote><p>${escapeHtml(item.note)}</p></article>`).join("")}</div>` : ""}
+    </article>`;
+  }
+
+  function annotationSearchText(batch) {
+    return normalize([batch.pageTitle, batch.pageUrl, batch.siteHost, A.formatAnnotationBatch(batch, currentLanguage()), ...batch.items.flatMap((item) => [item.quote, item.note])].join(" ")).toLowerCase();
   }
 
   function buildGroups() {
@@ -180,6 +256,7 @@
     if (!button) {
       return;
     }
+    if (currentTab === "annotations") return handleAnnotationListClick(button);
     const group = groups.find((item) => item.key === button.closest("[data-term-key]")?.dataset.termKey);
     if (!group) {
       return;
@@ -197,6 +274,28 @@
       openSourceThread(group);
     } else if (action === "delete-group") {
       await deleteGroup(group);
+    }
+  }
+
+  async function handleAnnotationListClick(button) {
+    const batch = groups.find((item) => item.id === button.closest("[data-batch-id]")?.dataset.batchId);
+    if (!batch) return;
+    const action = button.dataset.action;
+    if (action === "toggle-annotation") {
+      toggleSet(expandedTerms, batch.id);
+      render();
+    } else if (action === "copy-annotation") {
+      await copyText(A.formatAnnotationBatch(batch, currentLanguage()));
+    } else if (action === "open-annotation-source" && batch.pageUrl) {
+      chrome.tabs.create({ url: batch.pageUrl });
+    } else if (action === "delete-annotation-batch") {
+      if (!window.confirm(t("history.annotationDeleteConfirm", currentLanguage()))) return;
+      delete annotationBatches[batch.id];
+      Object.keys(activeAnnotationBatches).forEach((key) => {
+        if (activeAnnotationBatches[key] === batch.id) delete activeAnnotationBatches[key];
+      });
+      await chrome.storage.local.set({ [STORAGE_KEYS.annotationBatches]: annotationBatches, [STORAGE_KEYS.activeAnnotationBatches]: activeAnnotationBatches });
+      render();
     }
   }
 

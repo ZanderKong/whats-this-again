@@ -65,7 +65,7 @@ Click an image to open the full-size version.
 
 ## Current Version
 
-- Extension version: `0.3.0`
+- Extension version: `0.4.0`
 - Manifest: Chrome Manifest V3
 - Landing page: `docs/index.html`
 - Storage: `chrome.storage.local`
@@ -76,6 +76,8 @@ Click an image to open the full-size version.
 - **Context awareness**: optionally send nearby page context to improve the explanation.
 - **Custom questions**: long-press the dot to ask your own question.
 - **Follow-ups**: continue asking about the same concept in the answer panel.
+- **Multi-point annotations**: collect quotes and comments, edit or delete them directly in a basket, then drag the batch into an AI editor without sending it.
+- **Verified fallback**: if editor insertion cannot be verified, copy the payload and only finish after a matching paste action.
 - **Explicit saving**: temporary answers are not saved until you click Save.
 - **Excerpt saving**: select part of an answer and save only the useful excerpt.
 - **History reminders**: revisit saved explanations through subtle reminders when the term appears again.
@@ -125,6 +127,9 @@ The following data stays in local browser storage:
 - Model configuration and API Key.
 - Default prompt, language, theme color, save scope, and reminder settings.
 - Explanations, excerpts, follow-ups, and source-page metadata that you explicitly save.
+- Pending and completed annotation quotes, limited context, comments, source metadata, and delivery status.
+
+The extension writes to the clipboard only after a failed drag insertion or an explicit Copy all action. It never reads the clipboard and never sends a message automatically. Once annotations are placed in a third-party AI editor, that site processes them under its own privacy policy. Annotation content is not sent to project-operated servers.
 
 When using third-party model services, follow their privacy policies and data terms.
 
@@ -135,6 +140,7 @@ When using third-party model services, follow their privacy policies and data te
 - `storage`: save settings and history explanations.
 - `activeTab`: refresh current page state.
 - `tabs`: open source pages and settings/history pages.
+- `clipboardWrite`: write the integrated annotation payload only after failed insertion or an explicit user copy; no clipboard-read permission is requested.
 - `http://*/*`, `https://*/*`: inject the content script on regular web pages.
 
 Toolbar icons are provided as `16`, `24`, `32`, `48`, and `128` pixel PNG files for browser scaling and display-density support.
