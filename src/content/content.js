@@ -45,6 +45,9 @@
   let interactionStack = null;
   let answerSurface = null;
   let composerSurface = null;
+  let annotationActionSurface = null;
+  let sendActionSurface = null;
+  let composerError = null;
   let toast = null;
   let historyHint = null;
   let historyHintLine = null;
@@ -128,6 +131,11 @@
           --iai-line: rgba(31, 41, 55, 0.12);
           --iai-paper: #ffffff;
           --iai-wash: #f6f8fb;
+          --iai-note-ink: #2c2416;
+          --iai-note-muted: #756e61;
+          --iai-note-paper: #fdfaf0;
+          --iai-note-paper-soft: #f7f2e4;
+          --iai-note-line: rgba(44, 36, 22, 0.2);
           --iai-accent: #2563eb;
           --iai-accent-strong: #1d4ed8;
           --iai-accent-rgb: 37, 99, 235;
@@ -207,21 +215,26 @@
         .interaction-stack {
           position: fixed;
           display: grid;
+          grid-template-columns: minmax(0, 1fr) auto auto;
           gap: 8px;
           width: min(540px, calc(100vw - 24px));
           min-width: min(300px, calc(100vw - 24px));
           max-height: calc(100vh - 24px);
           pointer-events: none;
+          --iai-ink: var(--iai-note-ink);
+          --iai-muted: var(--iai-note-muted);
+          --iai-line: var(--iai-note-line);
         }
         .interaction-stack > * { pointer-events: auto; }
         .interaction-stack .interaction-surface {
+          grid-column: 1 / -1;
           position: relative;
           inset: auto;
           width: 100%;
           min-width: 0;
           max-height: min(610px, calc(100vh - 112px));
           border-radius: 5px;
-          background: linear-gradient(180deg, var(--iai-paper) 0%, #fbf8ef 100%);
+          background: linear-gradient(180deg, var(--iai-note-paper) 0%, var(--iai-note-paper-soft) 100%);
           box-shadow: 0 2px 7px rgba(44, 36, 22, 0.1), 0 12px 34px rgba(44, 36, 22, 0.12);
         }
         .interaction-stack .interaction-surface.collapsed {
@@ -230,7 +243,13 @@
         }
         .interaction-stack .answer-surface .surface-header {
           min-height: 42px;
-          background: rgba(var(--iai-accent-rgb), 0.06);
+          background: var(--iai-note-paper-soft);
+        }
+        .interaction-stack .answer-surface .term-title {
+          color: var(--iai-accent-strong);
+          font-family: ui-serif, "Songti SC", "Noto Serif CJK SC", STSong, Georgia, serif;
+          font-size: 15px;
+          font-weight: 700;
         }
         .interaction-stack .answer-surface .surface-body {
           max-height: calc(min(610px, 100vh - 112px) - 44px);
@@ -238,65 +257,62 @@
         }
         .composer-surface {
           position: relative;
+          grid-column: 1;
           width: 100%;
-          border: 1px solid rgba(44, 36, 22, 0.2);
-          border-radius: 5px;
-          padding: 8px 9px;
-          background: linear-gradient(180deg, #fffef9 0%, #fbf7ed 100%);
-          box-shadow: 0 2px 6px rgba(44, 36, 22, 0.08), 0 9px 24px rgba(44, 36, 22, 0.1);
-        }
-        .composer-inner {
-          display: grid;
-          grid-template-columns: minmax(0, 1fr) auto;
-          gap: 8px;
-          align-items: end;
+          min-height: 34px;
+          border: 1px solid var(--iai-note-line);
+          border-radius: 4px;
+          padding: 0 10px;
+          background: var(--iai-note-paper);
+          box-shadow: 0 1px 3px rgba(44, 36, 22, 0.07), 0 4px 14px rgba(44, 36, 22, 0.07);
         }
         .composer-surface textarea {
-          min-height: 36px;
-          max-height: 88px;
+          min-height: 34px;
+          max-height: 80px;
           border: 0;
-          padding: 8px 7px;
+          padding: 7px 0;
           background: transparent;
           box-shadow: none;
           color: var(--iai-ink);
-          font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+          font: 14px/1.5 ui-serif, "Songti SC", "Noto Serif CJK SC", STSong, Georgia, serif;
         }
         .composer-surface textarea:focus { outline: none; }
         .composer-surface:focus-within {
           border-color: var(--iai-accent);
-          box-shadow: 0 0 0 3px var(--iai-accent-soft), 0 9px 24px rgba(44, 36, 22, 0.1);
+          box-shadow: 0 0 0 3px var(--iai-accent-soft), 0 4px 14px rgba(44, 36, 22, 0.08);
         }
-        .composer-actions {
-          display: flex;
-          gap: 7px;
-          align-items: center;
-          padding-bottom: 1px;
-        }
-        .composer-annotation,
-        .composer-send,
+        .interaction-stack.followup-mode .composer-surface { grid-column: 1 / 3; }
+        .standalone-action,
         .composer-close {
-          border: 1px solid rgba(var(--iai-accent-rgb), 0.38);
-          background: transparent;
-          color: var(--iai-accent-strong);
+          border: 1px solid rgba(44, 36, 22, 0.22);
+          border-radius: 4px;
+          background: var(--iai-note-paper);
+          color: var(--iai-ink);
           cursor: pointer;
-          font: 700 12px/1 ui-sans-serif, system-ui, sans-serif;
-          transition: background 140ms ease, color 140ms ease, transform 120ms ease, box-shadow 140ms ease;
+          font: 650 12px/1 ui-sans-serif, system-ui, sans-serif;
+          transition: background 140ms ease, border-color 140ms ease, color 140ms ease, transform 120ms ease, box-shadow 140ms ease;
         }
-        .composer-annotation {
-          display: inline-flex;
+        .standalone-action {
+          align-self: end;
           min-height: 34px;
           align-items: center;
-          gap: 5px;
-          border-radius: 999px;
-          padding: 0 10px;
         }
-        .composer-send {
+        .annotation-standalone {
+          grid-column: 2;
+          display: inline-flex;
+          gap: 5px;
+          padding: 0 11px;
+        }
+        .send-standalone {
+          grid-column: 3;
           display: grid;
           width: 34px;
           height: 34px;
           place-items: center;
+          border-color: var(--iai-accent);
           border-radius: 50%;
           padding: 0;
+          color: var(--iai-accent-strong);
         }
         .composer-close {
           position: absolute;
@@ -309,18 +325,24 @@
           place-items: center;
           border-color: var(--iai-line);
           border-radius: 50%;
-          background: var(--iai-paper);
+          background: var(--iai-note-paper);
           color: var(--iai-muted);
           font-size: 17px;
         }
-        .composer-annotation:hover,
-        .composer-annotation:focus-visible,
-        .composer-send:hover,
-        .composer-send:focus-visible {
+        .annotation-standalone:hover,
+        .annotation-standalone:focus-visible {
           outline: none;
+          border-color: rgba(44, 36, 22, 0.48);
+          background: var(--iai-note-paper-soft);
+          transform: translateY(-1px);
+        }
+        .send-standalone:hover,
+        .send-standalone:focus-visible {
+          outline: none;
+          border-color: var(--iai-accent-strong);
           background: var(--iai-accent-strong);
-          color: #fff;
-          box-shadow: 0 6px 16px rgba(var(--iai-accent-rgb), 0.22);
+          color: var(--iai-accent-foreground, #fff);
+          box-shadow: 0 6px 16px var(--iai-accent-shadow, rgba(var(--iai-accent-rgb), 0.22));
           transform: translateY(-1px);
         }
         .composer-close:hover,
@@ -329,11 +351,11 @@
           color: var(--iai-warn);
           box-shadow: 0 4px 12px rgba(44, 36, 22, 0.14);
         }
-        .composer-annotation:active,
-        .composer-send:active { transform: scale(0.96); }
-        .composer-annotation:disabled,
-        .composer-send:disabled,
+        .standalone-action:active { transform: scale(0.96); }
+        .standalone-action:disabled,
         .composer-surface textarea:disabled { cursor: default; opacity: 0.48; }
+        .composer-error { grid-column: 1 / -1; margin: 0; }
+        .interaction-stack.answer-collapsed > :not(#answer-surface) { display: none !important; }
         .action-icon {
           width: 16px;
           height: 16px;
@@ -624,6 +646,33 @@
           background: #111827;
           color: #f9fafb;
         }
+        .interaction-stack .button,
+        .interaction-stack .icon-button,
+        .interaction-stack .scope-select {
+          border-color: var(--iai-note-line);
+          border-radius: 4px;
+          background: var(--iai-note-paper);
+        }
+        .interaction-stack .button.primary {
+          border-color: var(--iai-accent);
+          background: var(--iai-accent);
+        }
+        .interaction-stack .icon-button {
+          border-color: transparent;
+          background: transparent;
+        }
+        .interaction-stack .response {
+          font-family: ui-serif, "Songti SC", "Noto Serif CJK SC", STSong, Georgia, serif;
+        }
+        .interaction-stack .answer-card h3,
+        .interaction-stack .thread-message h3 {
+          font-family: ui-serif, "Songti SC", "Noto Serif CJK SC", STSong, Georgia, serif;
+        }
+        .interaction-stack .response code { border-radius: 2px; }
+        .interaction-stack .more-menu {
+          border-radius: 4px;
+          background: var(--iai-note-paper);
+        }
         .notice {
           border-left: 3px solid var(--iai-accent);
           padding: 8px 10px;
@@ -862,9 +911,9 @@
           .interaction-stack { width: calc(100vw - 18px); min-width: 0; }
           .term-title { max-width: calc(100vw - 120px); font-size: 16px; }
           .surface-body { padding: 10px; }
-          .composer-surface { padding: 7px; }
-          .composer-annotation span { display: none; }
-          .composer-annotation { width: 34px; padding: 0; justify-content: center; }
+          .composer-surface { padding-inline: 9px; }
+          .annotation-standalone span { display: none; }
+          .annotation-standalone { width: 34px; padding: 0; justify-content: center; }
         }
         @media (prefers-reduced-motion: reduce) {
           #annotation-basket,
@@ -873,8 +922,7 @@
             transition-duration: 1ms !important;
           }
           #annotation-basket.compacting { transform: none; }
-          .composer-annotation,
-          .composer-send,
+          .standalone-action,
           .composer-close { transition-duration: 1ms !important; }
         }
       </style>
@@ -894,6 +942,9 @@
     interactionStack = shadow.getElementById("interaction-stack");
     answerSurface = shadow.getElementById("answer-surface");
     composerSurface = shadow.getElementById("composer-surface");
+    annotationActionSurface = shadow.getElementById("annotation-action-surface");
+    sendActionSurface = shadow.getElementById("send-action-surface");
+    composerError = shadow.getElementById("inlineai-error");
     toast = shadow.getElementById("toast");
     historyHint = shadow.getElementById("history-hint");
     historyHintLine = shadow.getElementById("history-hint-line");
@@ -1633,24 +1684,42 @@
   function showInteractionSurfaces(visible) {
     panel?.classList.add("hidden");
     interactionStack?.classList.remove("hidden");
+    interactionStack?.classList.toggle("answer-collapsed", Boolean(panelState?.collapsed));
     answerSurface?.classList.toggle("hidden", !visible.answer);
     composerSurface?.classList.toggle("hidden", !visible.composer);
+    if (!visible.composer) {
+      annotationActionSurface?.classList.add("hidden");
+      sendActionSurface?.classList.add("hidden");
+      composerError?.classList.add("hidden");
+    }
   }
 
   function renderComposerSurface({ followup = false, annotation = false, close = false, disabled = false } = {}) {
+    const annotationLabel = t("content.saveAnnotation", currentLanguage());
+    const sendLabel = t(followup ? "content.sendFollowup" : "content.sendQuestion", currentLanguage());
+    interactionStack.classList.toggle("followup-mode", followup);
     composerSurface.innerHTML = UI.composerMarkup({
-      action: followup ? "send-followup" : "send-new",
-      annotation,
       close,
       disabled,
       maxLength: LIMITS.maxAnnotationNoteLength,
-      annotationText: t("content.annotation", currentLanguage()),
-      annotationLabel: t("content.saveAnnotation", currentLanguage()),
       inputLabel: t(followup ? "content.followupAria" : "content.customQuestionAria", currentLanguage()),
       placeholder: t(followup ? "content.followupComposerPlaceholder" : "content.askPlaceholder", currentLanguage()),
-      sendLabel: t(followup ? "content.sendFollowup" : "content.sendQuestion", currentLanguage()),
       closeLabel: t("content.close", currentLanguage())
     });
+    annotationActionSurface.innerHTML = UI.annotationActionMarkup(t("content.annotation", currentLanguage()));
+    annotationActionSurface.dataset.action = "save-annotation";
+    annotationActionSurface.title = annotationLabel;
+    annotationActionSurface.setAttribute("aria-label", annotationLabel);
+    annotationActionSurface.disabled = disabled;
+    annotationActionSurface.classList.toggle("hidden", !annotation);
+    sendActionSurface.innerHTML = UI.sendActionMarkup();
+    sendActionSurface.dataset.action = followup ? "send-followup" : "send-new";
+    sendActionSurface.title = sendLabel;
+    sendActionSurface.setAttribute("aria-label", sendLabel);
+    sendActionSurface.disabled = disabled;
+    sendActionSurface.classList.remove("hidden");
+    composerError.textContent = "";
+    composerError.classList.add("hidden");
   }
 
   function surfaceShell(term, _eyebrow, body, options = {}) {
@@ -1975,6 +2044,9 @@
     if ((surface.id === "panel" || surface.id === "answer-surface") && panelState) {
       panelState.collapsed = !panelState.collapsed;
       surface.classList.toggle("collapsed", panelState.collapsed);
+      if (surface.id === "answer-surface") {
+        interactionStack.classList.toggle("answer-collapsed", panelState.collapsed);
+      }
       return;
     }
     surface.classList.toggle("collapsed");
@@ -2318,9 +2390,13 @@
     panel?.classList.add("hidden");
     panel?.classList.remove("collapsed");
     interactionStack?.classList.add("hidden");
+    interactionStack?.classList.remove("answer-collapsed", "followup-mode");
     answerSurface?.classList.add("hidden");
     answerSurface?.classList.remove("collapsed");
     composerSurface?.classList.add("hidden");
+    annotationActionSurface?.classList.add("hidden");
+    sendActionSurface?.classList.add("hidden");
+    composerError?.classList.add("hidden");
     panelState = null;
   }
 
@@ -2483,7 +2559,7 @@
 
   function autoGrowTextarea(textarea) {
     textarea.style.height = "auto";
-    textarea.style.height = `${Math.min(textarea.scrollHeight, 60)}px`;
+    textarea.style.height = `${Math.min(textarea.scrollHeight, 80)}px`;
   }
 
   function showToast(message) {

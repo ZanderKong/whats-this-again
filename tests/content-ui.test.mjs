@@ -8,37 +8,41 @@ context.globalThis = context;
 vm.runInContext(readFileSync("src/content/content-ui.js", "utf8"), context);
 const UI = context.InlineAIContentUi;
 
-test("interaction shell exposes sibling answer and composer surfaces", () => {
+test("interaction shell exposes direct sibling answer, input, annotation, and send units", () => {
   const html = UI.interactionShell("Dialog");
   const answerStart = html.indexOf('id="answer-surface"');
   const answerEnd = html.indexOf("</section>", answerStart);
   const composerStart = html.indexOf('id="composer-surface"');
+  const composerEnd = html.indexOf("</section>", composerStart);
+  const annotationStart = html.indexOf('id="annotation-action-surface"');
+  const sendStart = html.indexOf('id="send-action-surface"');
   assert.ok(answerStart > -1);
   assert.ok(composerStart > answerEnd);
+  assert.ok(annotationStart > composerEnd);
+  assert.ok(sendStart > annotationStart);
   assert.match(html, /data-testid="answer-surface"/);
   assert.match(html, /data-testid="composer-surface"/);
 });
 
-test("initial composer has annotation and send actions with stable labels", () => {
+test("composer markup contains only the independent input and close control", () => {
   const html = UI.composerMarkup({
-    annotation: true,
     close: true,
-    annotationText: "批注",
-    annotationLabel: "保存这条批注",
     inputLabel: "自定义问题",
     placeholder: "问点什么",
-    sendLabel: "发送问题"
+    closeLabel: "关闭"
   });
   assert.match(html, /data-testid="composer-input"/);
-  assert.match(html, /data-testid="annotation-action"/);
-  assert.match(html, /data-testid="send-action"/);
-  assert.match(html, /aria-label="保存这条批注"/);
-  assert.match(html, /aria-label="发送问题"/);
-  assert.match(html, /<svg[^>]+aria-hidden="true"/);
+  assert.doesNotMatch(html, /annotation-action|send-action/);
+  assert.match(html, /aria-label="关闭"/);
 });
 
-test("loading composer disables text and actions", () => {
-  const html = UI.composerMarkup({ disabled: true, action: "send-followup", sendLabel: "Continue" });
+test("standalone actions use separate icon markup", () => {
+  assert.match(UI.annotationActionMarkup("批注"), /<svg[^>]+aria-hidden="true"/);
+  assert.match(UI.annotationActionMarkup("批注"), /<span>批注<\/span>/);
+  assert.match(UI.sendActionMarkup(), /<svg[^>]+aria-hidden="true"/);
+});
+
+test("loading composer disables the independent text input", () => {
+  const html = UI.composerMarkup({ disabled: true });
   assert.match(html, /textarea[^>]+disabled/);
-  assert.match(html, /data-action="send-followup"[^>]+disabled/);
 });

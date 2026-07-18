@@ -20,29 +20,32 @@
     return `<div id="interaction-stack" class="interaction-stack hidden" role="group" aria-label="${escapeHtml(dialogLabel)}">
       <section id="answer-surface" class="surface interaction-surface answer-surface hidden" data-testid="answer-surface" role="dialog" aria-modal="false"></section>
       <section id="composer-surface" class="composer-surface hidden" data-testid="composer-surface"></section>
+      <button id="annotation-action-surface" class="standalone-action annotation-standalone hidden" type="button" data-testid="annotation-action"></button>
+      <button id="send-action-surface" class="standalone-action send-standalone hidden" type="button" data-testid="send-action"></button>
+      <div id="inlineai-error" class="notice error composer-error hidden" role="alert" aria-live="assertive"></div>
     </div>`;
   }
 
   function composerMarkup(options = {}) {
-    const action = options.action || "send-new";
-    const annotation = options.annotation
-      ? `<button class="composer-annotation" type="button" data-action="save-annotation" data-testid="annotation-action" aria-label="${escapeHtml(options.annotationLabel)}" ${options.disabled ? "disabled" : ""}>${annotationIcon()}<span>${escapeHtml(options.annotationText)}</span></button>`
-      : "";
     const close = options.close
       ? `<button class="composer-close" type="button" data-action="close" title="${escapeHtml(options.closeLabel)}" aria-label="${escapeHtml(options.closeLabel)}">×</button>`
       : "";
-    return `${close}<div class="composer-inner">
-      <textarea id="inlineai-question" data-testid="composer-input" maxlength="${Number(options.maxLength) || 4000}" aria-label="${escapeHtml(options.inputLabel)}" placeholder="${escapeHtml(options.placeholder)}" rows="1" ${options.disabled ? "disabled" : ""}></textarea>
-      <div class="composer-actions">
-        ${annotation}
-        <button class="composer-send" type="button" data-action="${escapeHtml(action)}" data-testid="send-action" title="${escapeHtml(options.sendLabel)}" aria-label="${escapeHtml(options.sendLabel)}" ${options.disabled ? "disabled" : ""}>${sendIcon()}</button>
-      </div>
-    </div><div id="inlineai-error" class="notice error hidden" role="alert" aria-live="assertive"></div>`;
+    return `${close}<textarea id="inlineai-question" data-testid="composer-input" maxlength="${Number(options.maxLength) || 4000}" aria-label="${escapeHtml(options.inputLabel)}" placeholder="${escapeHtml(options.placeholder)}" rows="1" ${options.disabled ? "disabled" : ""}></textarea>`;
+  }
+
+  function annotationActionMarkup(label) {
+    return `${annotationIcon()}<span>${escapeHtml(label)}</span>`;
+  }
+
+  function sendActionMarkup() {
+    return sendIcon();
   }
 
   global.InlineAIContentUi = Object.freeze({
     interactionShell,
     composerMarkup,
+    annotationActionMarkup,
+    sendActionMarkup,
     annotationIcon,
     sendIcon
   });

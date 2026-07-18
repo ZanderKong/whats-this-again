@@ -2,7 +2,8 @@
 
 ## 0.5.0
 
-- Split the answer and composer into sibling Shadow DOM surfaces with paper-and-ink styling, stable test selectors, responsive controls, IME-safe Enter handling, and reduced-motion support.
+- Split the answer, input, annotation action, and send action into direct sibling Shadow DOM units with paper-and-ink styling, stable test selectors, responsive controls, IME-safe Enter handling, and reduced-motion support.
+- Collapsing an answer now hides its complete input/action row and restores the unchanged mode and draft on expansion.
 - Added an eight-step first-run onboarding page with shared provider/model configuration, connection testing, progress persistence, skip/complete behavior, and a Settings entry for reopening it.
 - Replaced arbitrary custom colors with five static theme token presets and added the idempotent Schema 3 migration for legacy colors.
 - Rewrote annotation delivery text as a first-person bilingual prompt shared by drag insertion, copy, fallback, and history flows.

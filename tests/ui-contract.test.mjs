@@ -6,6 +6,10 @@ test("content UI retains reduced-motion and stable interaction hooks", () => {
   const content = readFileSync("src/content/content.js", "utf8");
   const ui = readFileSync("src/content/content-ui.js", "utf8");
   assert.match(content, /@media \(prefers-reduced-motion: reduce\)/);
+  assert.match(content, /interaction-stack\.answer-collapsed/);
+  assert.match(content, /\.annotation-standalone\s*\{[^}]*grid-column:\s*2;/s);
+  assert.match(content, /\.send-standalone\s*\{[^}]*grid-column:\s*3;[^}]*width:\s*34px;[^}]*height:\s*34px;/s);
+  assert.match(content, /\.interaction-stack \.response\s*\{[^}]*font-family:\s*ui-serif/s);
   assert.match(ui, /data-testid=\"answer-surface\"/);
   assert.match(ui, /data-testid=\"composer-surface\"/);
   assert.match(ui, /data-testid=\"annotation-action\"/);
