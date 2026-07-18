@@ -21,6 +21,7 @@
     PORTS,
     LIMITS,
     mergeSettings,
+    getThemePreset,
     ensureStorageSchema,
     getEffectiveLanguage,
     t,
@@ -2017,14 +2018,15 @@
     if (!host) {
       return;
     }
-    const color = settings.highlightColor || "#c98257";
-    const rgb = hexToRgb(color) || { r: 201, g: 130, b: 87 };
-    const strong = shadeHex(color, -22);
-    host.style.setProperty("--iai-orange", color);
-    host.style.setProperty("--iai-accent", color);
-    host.style.setProperty("--iai-accent-strong", strong);
-    host.style.setProperty("--iai-accent-rgb", `${rgb.r}, ${rgb.g}, ${rgb.b}`);
-    host.style.setProperty("--iai-accent-soft", hexToRgba(color, 0.24));
+    const preset = getThemePreset(settings.highlightColor);
+    host.style.setProperty("--iai-orange", preset.value);
+    host.style.setProperty("--iai-accent", preset.value);
+    host.style.setProperty("--iai-accent-strong", preset.strong);
+    host.style.setProperty("--iai-accent-rgb", preset.rgb);
+    host.style.setProperty("--iai-accent-soft", preset.soft);
+    host.style.setProperty("--iai-accent-foreground", preset.foreground);
+    host.style.setProperty("--iai-accent-border", preset.border);
+    host.style.setProperty("--iai-accent-shadow", preset.shadow);
   }
 
   function panelIsOpen() {
@@ -2556,35 +2558,6 @@
   function truncateTitle(value, limit = 42) {
     const text = normalizeVisibleText(value);
     return text.length > limit ? `${text.slice(0, limit)}...` : text;
-  }
-
-  function hexToRgba(hex, alpha) {
-    const rgb = hexToRgb(hex);
-    if (!rgb) {
-      return `rgba(201, 130, 87, ${alpha})`;
-    }
-    return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`;
-  }
-
-  function hexToRgb(hex) {
-    const normalized = String(hex || "").replace("#", "");
-    if (!/^[0-9a-f]{6}$/i.test(normalized)) {
-      return null;
-    }
-    return {
-      r: parseInt(normalized.slice(0, 2), 16),
-      g: parseInt(normalized.slice(2, 4), 16),
-      b: parseInt(normalized.slice(4, 6), 16)
-    };
-  }
-
-  function shadeHex(hex, percent) {
-    const rgb = hexToRgb(hex);
-    if (!rgb) {
-      return "#914a20";
-    }
-    const shift = (value) => clamp(Math.round(value + (percent / 100) * 255), 0, 255);
-    return `#${[shift(rgb.r), shift(rgb.g), shift(rgb.b)].map((value) => value.toString(16).padStart(2, "0")).join("")}`;
   }
 
   function termKeyFor(term) {

@@ -6,6 +6,7 @@
     DEFAULT_SETTINGS,
     THEME_COLORS,
     mergeSettings,
+    getThemePreset,
     ensureStorageSchema,
     getEffectiveLanguage,
     t,
@@ -121,13 +122,14 @@
   }
 
   function applyDocumentTheme(color) {
-    const themeColor = color || DEFAULT_SETTINGS.highlightColor;
-    document.documentElement.style.setProperty("--accent", themeColor);
-    document.documentElement.style.setProperty("--accent-strong", shadeHex(themeColor, -22));
-    document.documentElement.style.setProperty("--accent-soft", hexToRgba(themeColor, 0.16));
-    document.documentElement.style.setProperty("--accent-line", hexToRgba(themeColor, 0.32));
+    const preset = getThemePreset(color);
+    document.documentElement.style.setProperty("--accent", preset.value);
+    document.documentElement.style.setProperty("--accent-strong", preset.strong);
+    document.documentElement.style.setProperty("--accent-soft", preset.soft);
+    document.documentElement.style.setProperty("--accent-line", preset.border);
+    document.documentElement.style.setProperty("--accent-shadow", preset.shadow);
     els.themePresets.querySelectorAll(".swatch").forEach((button) => {
-      button.classList.toggle("active", button.dataset.color?.toLowerCase() === themeColor.toLowerCase());
+      button.classList.toggle("active", button.dataset.color?.toLowerCase() === preset.value.toLowerCase());
     });
   }
 
@@ -175,28 +177,4 @@
       .replace(/'/g, "&#39;");
   }
 
-  function hexToRgba(hex, alpha) {
-    const normalized = String(hex || "").replace("#", "");
-    if (!/^[0-9a-f]{6}$/i.test(normalized)) {
-      return `rgba(201, 130, 87, ${alpha})`;
-    }
-    const r = parseInt(normalized.slice(0, 2), 16);
-    const g = parseInt(normalized.slice(2, 4), 16);
-    const b = parseInt(normalized.slice(4, 6), 16);
-    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-  }
-
-  function shadeHex(hex, percent) {
-    const normalized = String(hex || "").replace("#", "");
-    if (!/^[0-9a-f]{6}$/i.test(normalized)) {
-      return "#914a20";
-    }
-    const shift = (value) => Math.min(255, Math.max(0, Math.round(value + (percent / 100) * 255)));
-    const rgb = [
-      parseInt(normalized.slice(0, 2), 16),
-      parseInt(normalized.slice(2, 4), 16),
-      parseInt(normalized.slice(4, 6), 16)
-    ];
-    return `#${rgb.map((value) => shift(value).toString(16).padStart(2, "0")).join("")}`;
-  }
 })();

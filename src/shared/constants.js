@@ -9,7 +9,7 @@
     schemaVersion: "inlineai_schema_version"
   };
 
-  const CURRENT_SCHEMA_VERSION = 2;
+  const CURRENT_SCHEMA_VERSION = 3;
 
   const MESSAGE_TYPES = {
     apiCall: "INLINEAI_API_CALL",
@@ -104,7 +104,6 @@
       "options.defaultSaveScope": "默认保存范围",
       "options.hideReminders": "临时隐藏历史悬浮提醒",
       "options.theme": "主题色",
-      "options.customColor": "自定义",
       "options.themeHint": "主题色会同步到圆点、输入框、回答框和工具栏弹窗。",
       "options.historyData": "历史数据",
       "options.clearMemories": "清空历史解释",
@@ -333,7 +332,6 @@
       "options.defaultSaveScope": "Default save scope",
       "options.hideReminders": "Temporarily hide history hover reminders",
       "options.theme": "Theme color",
-      "options.customColor": "Custom",
       "options.themeHint": "The theme color is applied to the dot, input, answer panel, and toolbar popup.",
       "options.historyData": "History data",
       "options.clearMemories": "Clear explanation history",
@@ -516,11 +514,11 @@
   ];
 
   const THEME_COLORS = [
-    { id: "green", label: "绿", labelKey: "color.green", value: "#6f8f7b" },
-    { id: "orange", label: "橙", labelKey: "color.orange", value: "#c98257" },
-    { id: "blue", label: "蓝", labelKey: "color.blue", value: "#6f89a6" },
-    { id: "gray", label: "灰", labelKey: "color.gray", value: "#85837d" },
-    { id: "pink", label: "粉", labelKey: "color.pink", value: "#bd7f83" }
+    { id: "green", label: "绿", labelKey: "color.green", value: "#6f8f7b", strong: "#466453", soft: "rgba(111, 143, 123, 0.16)", foreground: "#ffffff", border: "rgba(111, 143, 123, 0.34)", shadow: "rgba(70, 100, 83, 0.24)", rgb: "111, 143, 123" },
+    { id: "orange", label: "橙", labelKey: "color.orange", value: "#c98257", strong: "#914a20", soft: "rgba(201, 130, 87, 0.16)", foreground: "#ffffff", border: "rgba(201, 130, 87, 0.34)", shadow: "rgba(145, 74, 32, 0.24)", rgb: "201, 130, 87" },
+    { id: "blue", label: "蓝", labelKey: "color.blue", value: "#6f89a6", strong: "#405f82", soft: "rgba(111, 137, 166, 0.16)", foreground: "#ffffff", border: "rgba(111, 137, 166, 0.34)", shadow: "rgba(64, 95, 130, 0.24)", rgb: "111, 137, 166" },
+    { id: "gray", label: "灰", labelKey: "color.gray", value: "#85837d", strong: "#55534e", soft: "rgba(133, 131, 125, 0.16)", foreground: "#ffffff", border: "rgba(133, 131, 125, 0.34)", shadow: "rgba(85, 83, 78, 0.24)", rgb: "133, 131, 125" },
+    { id: "pink", label: "粉", labelKey: "color.pink", value: "#bd7f83", strong: "#884e53", soft: "rgba(189, 127, 131, 0.16)", foreground: "#ffffff", border: "rgba(189, 127, 131, 0.34)", shadow: "rgba(136, 78, 83, 0.24)", rgb: "189, 127, 131" }
   ];
 
   const PROMPT_TEMPLATES = [
@@ -617,10 +615,7 @@
   function mergeSettings(saved) {
     const source = saved || {};
     const migratedMode = source.highlightMode || migrateLegacyHighlightStyle(source.highlightStyle);
-    const savedColor = String(source.highlightColor || "").toLowerCase();
-    const migratedColor = !savedColor || savedColor === "#fef08c"
-      ? DEFAULT_SETTINGS.highlightColor
-      : source.highlightColor;
+    const migratedColor = getThemePreset(source.highlightColor).value;
     const language = LANGUAGES[source.language] ? source.language : DEFAULT_SETTINGS.language;
 
     return {
@@ -649,11 +644,16 @@
 
     const stored = await area.get([
       STORAGE_KEYS.schemaVersion,
+      STORAGE_KEYS.settings,
       STORAGE_KEYS.memories,
       STORAGE_KEYS.annotationBatches,
       STORAGE_KEYS.activeAnnotationBatches
     ]);
     const patch = {};
+    const normalizedSettings = mergeSettings(stored[STORAGE_KEYS.settings]);
+    if (stored[STORAGE_KEYS.settings] && JSON.stringify(normalizedSettings) !== JSON.stringify(stored[STORAGE_KEYS.settings])) {
+      patch[STORAGE_KEYS.settings] = normalizedSettings;
+    }
     if (!stored[STORAGE_KEYS.memories] || typeof stored[STORAGE_KEYS.memories] !== "object") patch[STORAGE_KEYS.memories] = {};
     if (!stored[STORAGE_KEYS.annotationBatches] || typeof stored[STORAGE_KEYS.annotationBatches] !== "object") patch[STORAGE_KEYS.annotationBatches] = {};
     if (!stored[STORAGE_KEYS.activeAnnotationBatches] || typeof stored[STORAGE_KEYS.activeAnnotationBatches] !== "object") patch[STORAGE_KEYS.activeAnnotationBatches] = {};
@@ -670,6 +670,13 @@
       return "box";
     }
     return DEFAULT_SETTINGS.highlightMode;
+  }
+
+  function getThemePreset(value) {
+    const normalized = String(value || "").toLowerCase();
+    return THEME_COLORS.find((preset) => preset.id === normalized || preset.value.toLowerCase() === normalized)
+      || THEME_COLORS.find((preset) => preset.value === DEFAULT_SETTINGS.highlightColor)
+      || THEME_COLORS[0];
   }
 
   function resolveLanguage(settingLanguage, runtimeLanguage) {
@@ -816,6 +823,7 @@
     LIMITS,
     normalizeTerm,
     mergeSettings,
+    getThemePreset,
     ensureStorageSchema,
     resolveLanguage,
     getEffectiveLanguage,
