@@ -64,6 +64,7 @@
   let annotationHighlightLayer = null;
   let editorDropTarget = null;
   let annotationBasketTimer = null;
+  let annotationBasketCompactTimer = null;
   let annotationFrame = 0;
   let annotationObserver = null;
   let annotationResizeObserver = null;
@@ -579,35 +580,79 @@
           display: flex;
           align-items: center;
           justify-content: center;
+          gap: 0;
           max-width: min(390px, calc(100vw - 32px));
-          min-width: 42px;
-          min-height: 42px;
-          border: 1px solid rgba(var(--iai-accent-rgb), 0.42);
-          border-radius: 14px;
-          padding: 10px 13px;
-          background: linear-gradient(145deg, var(--iai-paper), rgba(var(--iai-accent-rgb), 0.1));
-          color: var(--iai-ink);
-          box-shadow: 0 16px 38px rgba(15, 23, 42, 0.2);
+          min-width: 40px;
+          height: 40px;
+          border: 0;
+          border-radius: 999px;
+          padding: 0 14px;
+          overflow: hidden;
+          background: var(--iai-accent-strong);
+          color: #fff;
+          box-shadow: 0 12px 28px rgba(15, 23, 42, 0.24), 0 2px 7px rgba(var(--iai-accent-rgb), 0.22);
           cursor: grab;
           pointer-events: auto;
-          font: 700 13px/1.35 ui-serif, Georgia, "Songti SC", serif;
-          text-align: left;
-          transition: width 180ms ease, border-radius 180ms ease, transform 180ms ease;
+          font: 750 13px/1 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+          white-space: nowrap;
+          transform-origin: right center;
+          transition: padding 180ms ease, border-radius 180ms ease, transform 180ms ease, opacity 180ms ease, box-shadow 180ms ease;
+        }
+        #annotation-basket:hover {
+          box-shadow: 0 15px 34px rgba(15, 23, 42, 0.28), 0 3px 9px rgba(var(--iai-accent-rgb), 0.26);
+          transform: translateY(-1px);
+        }
+        .annotation-basket-count,
+        .annotation-basket-label,
+        .annotation-basket-check {
+          display: inline-block;
+          flex: 0 0 auto;
+        }
+        .annotation-basket-label {
+          max-width: 250px;
+          margin-left: 4px;
+          overflow: hidden;
+          opacity: 1;
+          transform: translateX(0);
+          transition: max-width 180ms ease, margin-left 180ms ease, opacity 130ms ease, transform 180ms ease;
+        }
+        .annotation-basket-check {
+          margin-left: 7px;
+          color: #fff;
+          font-size: 14px;
+        }
+        #annotation-basket.compacting {
+          transform: scale(0.94);
+        }
+        #annotation-basket.compacting .annotation-basket-label,
+        #annotation-basket.compact .annotation-basket-label {
+          max-width: 0;
+          margin-left: 0;
+          opacity: 0;
+          transform: translateX(8px);
         }
         #annotation-basket.compact {
-          width: 44px;
-          height: 44px;
+          width: 40px;
+          min-width: 40px;
+          height: 40px;
           padding: 0;
           border-radius: 50%;
-          font: 800 15px/1 ui-sans-serif, system-ui, sans-serif;
+          font-size: 14px;
+          animation: annotation-basket-settle 220ms cubic-bezier(.2, .8, .2, 1);
         }
-        #annotation-basket.copied::after {
-          content: "✓";
-          margin-left: 7px;
-          color: var(--iai-accent-strong);
+        #annotation-basket.copied {
+          padding-inline: 15px;
+        }
+        #annotation-basket.copied .annotation-basket-label {
+          margin-left: 0;
         }
         #annotation-basket.dragging { cursor: grabbing; transform: scale(0.96); opacity: 0.72; }
-        #annotation-basket:focus-visible { outline: 3px solid rgba(var(--iai-accent-rgb), 0.28); outline-offset: 3px; }
+        #annotation-basket:focus-visible { outline: 3px solid rgba(var(--iai-accent-rgb), 0.32); outline-offset: 3px; }
+        @keyframes annotation-basket-settle {
+          0% { transform: scale(0.94); }
+          62% { transform: scale(1.05); }
+          100% { transform: scale(1); }
+        }
         #editor-drop-target {
           inset: auto;
           z-index: 3;
@@ -640,12 +685,45 @@
         .annotation-note-button:focus-visible { outline: 2px solid rgba(var(--iai-accent-rgb),.3); outline-offset: 1px; }
         .annotation-edit-area { width: 100%; min-height: 72px; margin: 0; border: 1px solid rgba(var(--iai-accent-rgb),.36); border-radius: 8px; padding: 8px; color: var(--iai-ink); background: rgba(255,255,255,.88); font: 600 14px/1.55 ui-sans-serif, system-ui, sans-serif; resize: vertical; }
         .annotation-footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+        .annotation-panel .term-title {
+          display: inline-flex;
+          width: fit-content;
+          max-width: min(430px, calc(100vw - 112px));
+          min-height: 30px;
+          align-items: center;
+          border-radius: 999px;
+          padding: 6px 11px;
+          background: var(--iai-accent-strong);
+          color: #fff;
+          font-size: 14px;
+          font-weight: 750;
+        }
+        .annotation-panel .annotation-footer .button.primary {
+          min-height: 36px;
+          border: 0;
+          border-radius: 999px;
+          padding-inline: 16px;
+          background: var(--iai-accent-strong);
+          box-shadow: 0 7px 18px rgba(var(--iai-accent-rgb), 0.2);
+        }
+        .annotation-panel .annotation-footer .button.primary:hover,
+        .annotation-panel .annotation-footer .button.primary:focus-visible {
+          box-shadow: 0 9px 22px rgba(var(--iai-accent-rgb), 0.27);
+        }
         .prompt-composer.annotation-enabled { grid-template-columns: minmax(0, 1fr) auto auto; }
         .annotation-action { color: var(--iai-accent-strong); border-color: rgba(var(--iai-accent-rgb), .32); }
         @media (max-width: 520px) {
           .surface { width: calc(100vw - 18px); }
           .term-title { max-width: calc(100vw - 120px); font-size: 16px; }
           .surface-body { padding: 10px; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          #annotation-basket,
+          .annotation-basket-label {
+            animation: none !important;
+            transition-duration: 1ms !important;
+          }
+          #annotation-basket.compacting { transform: none; }
         }
       </style>
       <button id="bubble" class="hidden" type="button" title="${escapeHtml(t("content.bubbleTitle", currentLanguage()))}" aria-label="${escapeHtml(t("content.bubbleTitle", currentLanguage()))}"></button>
@@ -2447,19 +2525,33 @@
     if (!activeAnnotationBatch?.items?.length) return clearAnnotationUi();
     const count = activeAnnotationBatch.items.length;
     const copied = activeAnnotationBatch.status === A.STATUS.copiedPendingPaste;
-    annotationBasket.classList.remove("hidden", "dragging");
-    annotationBasket.classList.toggle("compact", !expanded);
+    const showExpanded = copied || expanded;
+    clearAnnotationBasketTimers();
+    annotationBasket.classList.remove("hidden", "dragging", "compacting");
+    annotationBasket.classList.toggle("compact", !showExpanded);
     annotationBasket.classList.toggle("copied", copied);
-    annotationBasket.textContent = copied
-      ? t("content.annotationCopied", currentLanguage())
-      : expanded
-        ? t("content.annotationSaved", { count }, currentLanguage())
-        : String(count);
-    annotationBasket.setAttribute("aria-label", t("content.annotationBasketAria", { count }, currentLanguage()));
-    window.clearTimeout(annotationBasketTimer);
-    if (expanded && !copied) {
-      annotationBasketTimer = window.setTimeout(() => renderAnnotationBasket(false), 4000);
+    if (copied) {
+      annotationBasket.innerHTML = `<span class="annotation-basket-label">${escapeHtml(t("content.annotationCopied", currentLanguage()))}</span><span class="annotation-basket-check" aria-hidden="true">✓</span>`;
+    } else {
+      const labelKey = count === 1 ? "content.annotationBasketLabelOne" : "content.annotationBasketLabelMany";
+      annotationBasket.innerHTML = `<span class="annotation-basket-count">${count}</span><span class="annotation-basket-label">${escapeHtml(t(labelKey, currentLanguage()))}</span>`;
     }
+    const basketAria = t("content.annotationBasketAria", { count }, currentLanguage());
+    annotationBasket.setAttribute("aria-label", copied ? `${t("content.annotationCopied", currentLanguage())}. ${basketAria}` : basketAria);
+    annotationBasket.setAttribute("title", t("content.annotationSaved", { count }, currentLanguage()));
+    if (showExpanded && !copied) {
+      annotationBasketTimer = window.setTimeout(() => {
+        annotationBasket.classList.add("compacting");
+        annotationBasketCompactTimer = window.setTimeout(() => renderAnnotationBasket(false), 180);
+      }, 4000);
+    }
+  }
+
+  function clearAnnotationBasketTimers() {
+    window.clearTimeout(annotationBasketTimer);
+    window.clearTimeout(annotationBasketCompactTimer);
+    annotationBasketTimer = null;
+    annotationBasketCompactTimer = null;
   }
 
   function openAnnotationPanel(annotationId) {
@@ -2483,7 +2575,7 @@
         ${editing ? `<textarea class="annotation-edit-area" data-annotation-edit="${escapeHtml(item.id)}" maxlength="${LIMITS.maxAnnotationNoteLength}" aria-label="${escapeHtml(t("content.annotationEdit", currentLanguage()))}">${escapeHtml(item.note)}</textarea>` : `<button class="annotation-note-button" type="button" data-action="edit-annotation" data-annotation-id="${escapeHtml(item.id)}">${escapeHtml(item.note)}</button>`}
       </article>`;
     }).join("");
-    panel.className = panelClass();
+    panel.className = `${panelClass()} annotation-panel`;
     panel.innerHTML = surfaceShell(t("content.annotationPanelTitle", { count: items.length }, currentLanguage()), "", `
       ${info.tooLong ? `<div class="notice error">${escapeHtml(t("content.annotationTooLong", currentLanguage()))}</div>` : ""}
       <div class="annotation-list">${cards}</div>
@@ -2596,7 +2688,7 @@
   }
 
   function clearAnnotationUi() {
-    window.clearTimeout(annotationBasketTimer);
+    clearAnnotationBasketTimers();
     annotationBasket?.classList.add("hidden");
     annotationHighlightLayer && (annotationHighlightLayer.innerHTML = "");
     editorDropTarget?.classList.add("hidden");
