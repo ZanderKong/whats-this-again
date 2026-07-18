@@ -3056,7 +3056,7 @@
     if (!pendingPasteSignal || !activeAnnotationBatch || Date.now() - pendingPasteSignal.at > 1500) return;
     const found = AR.findAdapter(pendingPasteSignal.target);
     if (!found) return;
-    const payload = A.formatAnnotationBatch(activeAnnotationBatch, currentLanguage());
+    const payload = A.buildAnnotationPrompt(activeAnnotationBatch, currentLanguage());
     const editorText = found.adapter.readText(found.root);
     if (!A.matchesPayload({ payload, pastedText: pendingPasteSignal.pastedText, editorText, inputType: pendingPasteSignal.inputType, pasteEvent: pendingPasteSignal.pasteEvent })) return;
     activeAnnotationBatch = A.transitionBatch(activeAnnotationBatch, A.STATUS.pastedAfterFallback, { delivery: { method: "paste_after_fallback" } });

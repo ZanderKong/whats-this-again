@@ -136,7 +136,7 @@
 
   function renderAnnotationBatch(batch) {
     const expanded = expandedTerms.has(batch.id);
-    const payload = A.formatAnnotationBatch(batch, currentLanguage());
+    const payload = A.buildAnnotationPrompt(batch, currentLanguage());
     return `<article class="memory${expanded ? " expanded" : ""}" data-batch-id="${escapeHtml(batch.id)}">
       <header class="memory-header"><div>
         <h3 class="term">${escapeHtml(batch.pageTitle || batch.siteHost || batch.pageUrl)}</h3>
@@ -153,7 +153,7 @@
   }
 
   function annotationSearchText(batch) {
-    return normalize([batch.pageTitle, batch.pageUrl, batch.siteHost, A.formatAnnotationBatch(batch, currentLanguage()), ...batch.items.flatMap((item) => [item.quote, item.note])].join(" ")).toLowerCase();
+    return normalize([batch.pageTitle, batch.pageUrl, batch.siteHost, A.buildAnnotationPrompt(batch, currentLanguage()), ...batch.items.flatMap((item) => [item.quote, item.note])].join(" ")).toLowerCase();
   }
 
   function buildGroups() {
@@ -285,7 +285,7 @@
       toggleSet(expandedTerms, batch.id);
       render();
     } else if (action === "copy-annotation") {
-      await copyText(A.formatAnnotationBatch(batch, currentLanguage()));
+      await copyText(A.buildAnnotationPrompt(batch, currentLanguage()));
     } else if (action === "open-annotation-source" && batch.pageUrl) {
       chrome.tabs.create({ url: batch.pageUrl });
     } else if (action === "delete-annotation-batch") {

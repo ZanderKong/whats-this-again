@@ -139,20 +139,42 @@
     });
   }
 
-  function formatAnnotationBatch(batchInput, language) {
+  function buildAnnotationPrompt(batchInput, language) {
     const batch = normalizeBatch(batchInput);
     const items = batch.items;
     const english = String(language || "").toLowerCase().startsWith("en");
-    return items.map((item) => {
-      const context = contextText(item.context) || item.quote;
-      return english
-        ? `The user has a question about “${item.quote}” in “${context}”: ${item.note}`
-        : `用户针对「${context}」中的「${item.quote}」提出疑问：${item.note}`;
-    }).join("\n\n");
+    const quoteCounts = items.reduce((counts, item) => {
+      const key = comparableText(item.quote);
+      counts.set(key, (counts.get(key) || 0) + 1);
+      return counts;
+    }, new Map());
+    const header = english
+      ? "I have several annotations on the response above. Please address each one in relation to the quoted text:"
+      : "我对上面的回答有几处批注，请结合对应原文逐条回应：";
+    const entries = items.map((item) => {
+      const quote = indentPromptText(item.quote, "  ");
+      const note = indentPromptText(item.note, "  ");
+      const ambiguous = quoteCounts.get(comparableText(item.quote)) > 1 || item.matchCount > 1;
+      const needsContext = comparableText(item.quote).length < 12 || ambiguous || item.anchorState === "missing";
+      const context = needsContext ? contextText(item.context) : "";
+      if (english) {
+        return `- Original: “${quote}”\n  My annotation: ${note}${context ? `\n  Related context: ${indentPromptText(context, "  ")}` : ""}`;
+      }
+      return `- 原文：「${quote}」\n  我的批注：${note}${context ? `\n  相关上下文：${indentPromptText(context, "  ")}` : ""}`;
+    });
+    return entries.length ? `${header}\n\n${entries.join("\n\n")}` : "";
+  }
+
+  function indentPromptText(value, indent) {
+    return normalizeText(value).replace(/\n/g, `\n${indent}`);
+  }
+
+  function formatAnnotationBatch(batchInput, language) {
+    return buildAnnotationPrompt(batchInput, language);
   }
 
   function payloadInfo(batch, language) {
-    const text = formatAnnotationBatch(batch, language);
+    const text = buildAnnotationPrompt(batch, language);
     return { text, hash: hashText(text), tooLong: text.length > LIMITS.maxPayloadLength, length: text.length };
   }
 
@@ -212,7 +234,7 @@
 
   global.InlineAIAnnotations = Object.freeze({
     STATUS, LIMITS, TRANSITIONS, normalizeText, comparableText, hashText, pageKeyFor,
-    normalizeItem, normalizeBatch, createBatch, sortItems, formatAnnotationBatch,
+    normalizeItem, normalizeBatch, createBatch, sortItems, buildAnnotationPrompt, formatAnnotationBatch,
     payloadInfo, canTransition, transitionBatch, resetAfterEdit, matchesPayload,
     statusLabelKey, contextText, createId
   });
