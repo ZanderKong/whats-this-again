@@ -1,11 +1,10 @@
 (function inlineAiOptions() {
   const C = globalThis.InlineAIConstants;
+  const SettingsForm = globalThis.InlineAISettingsForm;
   const {
     STORAGE_KEYS,
-    MESSAGE_TYPES,
     DEFAULT_SETTINGS,
     LANGUAGES,
-    MODEL_PROVIDERS,
     THEME_COLORS,
     SAVE_SCOPES,
     mergeSettings,
@@ -15,7 +14,6 @@
     getDefaultQuestion,
     t,
     applyI18n,
-    providerLabel,
     colorLabel,
     saveScopeLabel
   } = C;
@@ -24,7 +22,6 @@
   const status = document.getElementById("status");
   const memoryCount = document.getElementById("memory-count");
   const annotationCount = document.getElementById("annotation-count");
-  const modelList = document.getElementById("model-list");
   const themePresets = document.getElementById("theme-presets");
   const fields = {
     modelProvider: document.getElementById("modelProvider"),
@@ -44,6 +41,7 @@
   let currentActiveAnnotationBatches = {};
   let autoSaveTimer = null;
   let suppressSettingsRender = false;
+  let connectionController = null;
 
   init().catch((error) => {
     showStatus(t("options.loadFailed", { message: error.message || error }, currentLanguage()), true);
@@ -60,6 +58,13 @@
 
     renderSelectOptions();
     applyPageLanguage();
+    connectionController = SettingsForm.createConnectionController({
+      root: form,
+      settings: currentSettings,
+      language: currentLanguage(),
+      onChange() { scheduleSettingsSave(); },
+      onStatus: showStatus
+    });
     renderForm();
     renderMemoryCount();
 
@@ -67,13 +72,11 @@
     form.addEventListener("input", handleFormChange);
     form.addEventListener("change", handleFormChange);
     themePresets.addEventListener("click", handlePresetClick);
-    fields.modelProvider.addEventListener("change", handleProviderChange);
-    document.getElementById("refresh-models").addEventListener("click", handleRefreshModels);
-    document.getElementById("test-api").addEventListener("click", handleTest);
     document.getElementById("clear-memories").addEventListener("click", handleClearMemories);
     document.getElementById("open-history").addEventListener("click", openHistoryPage);
     document.getElementById("open-annotation-history").addEventListener("click", () => openHistoryPage("annotations"));
     document.getElementById("clear-annotations").addEventListener("click", handleClearAnnotations);
+    document.getElementById("open-onboarding").addEventListener("click", openOnboarding);
 
     chrome.storage.onChanged.addListener((changes, areaName) => {
       if (areaName !== "local") {
@@ -107,9 +110,6 @@
     fields.language.innerHTML = Object.values(LANGUAGES)
       .map((item) => `<option value="${item.id}">${escapeHtml(t(item.labelKey, language))}</option>`)
       .join("");
-    fields.modelProvider.innerHTML = MODEL_PROVIDERS
-      .map((provider) => `<option value="${provider.id}">${escapeHtml(providerLabel(provider, language))}</option>`)
-      .join("");
     fields.defaultSaveScope.innerHTML = Object.entries(SAVE_SCOPES)
       .map(([value]) => `<option value="${value}">${escapeHtml(saveScopeLabel(value, language))}</option>`)
       .join("");
@@ -132,12 +132,15 @@
     fields.includePageContext.checked = currentSettings.includePageContext !== false;
     fields.defaultSaveScope.value = currentSettings.defaultSaveScope;
     fields.hideReminders.checked = Boolean(currentSettings.hideReminders);
+    connectionController?.render(currentSettings);
     applyDocumentTheme(currentSettings.highlightColor);
   }
 
   function collectSettings() {
     const language = fields.language.value;
+    const connection = connectionController?.collect(currentSettings) || currentSettings;
     return mergeSettings({
+      ...connection,
       apiBaseUrl: fields.apiBaseUrl.value.trim(),
       apiKey: fields.apiKey.value.trim(),
       modelProvider: fields.modelProvider.value,
@@ -162,6 +165,7 @@
       currentSettings = nextSettings;
       renderSelectOptions();
       applyPageLanguage();
+      connectionController?.setLanguage(currentLanguage());
       fields.language.value = currentSettings.language;
       fields.modelProvider.value = currentSettings.modelProvider;
       fields.defaultSaveScope.value = currentSettings.defaultSaveScope;
@@ -204,67 +208,6 @@
     scheduleSettingsSave();
   }
 
-  async function handleTest() {
-    const settings = collectSettings();
-    showStatus(t("options.testingApi", currentLanguage()));
-
-    const response = await chrome.runtime.sendMessage({
-      type: MESSAGE_TYPES.testApi,
-      payload: { settingsOverride: settings }
-    });
-
-    if (response?.ok) {
-      showStatus(t("options.connected", currentLanguage()));
-    } else {
-      showStatus(response?.error || t("options.connectionFailed", currentLanguage()), true);
-    }
-  }
-
-  function handleProviderChange() {
-    const provider = MODEL_PROVIDERS.find((item) => item.id === fields.modelProvider.value);
-    if (!provider || provider.id === "custom") {
-      return;
-    }
-    fields.apiBaseUrl.value = provider.apiBaseUrl;
-    if (provider.defaultModel) {
-      fields.model.value = provider.defaultModel;
-    }
-    modelList.innerHTML = "";
-    showStatus(provider.supportsModelList ? t("options.providerAppliedRefresh", currentLanguage()) : t("options.providerAppliedManual", currentLanguage()));
-    scheduleSettingsSave();
-  }
-
-  async function handleRefreshModels() {
-    const settings = collectSettings();
-    const provider = MODEL_PROVIDERS.find((item) => item.id === settings.modelProvider);
-    if (provider && provider.supportsModelList === false) {
-      showStatus(t("options.modelListUnsupported", currentLanguage()), true);
-      return;
-    }
-
-    showStatus(t("options.refreshingModels", currentLanguage()));
-    const response = await chrome.runtime.sendMessage({
-      type: MESSAGE_TYPES.listModels,
-      payload: { settingsOverride: settings }
-    });
-
-    if (!response?.ok) {
-      modelList.innerHTML = "";
-      showStatus(response?.error || t("options.refreshFailed", currentLanguage()), true);
-      return;
-    }
-
-    const models = response.models || [];
-    modelList.innerHTML = models
-      .map((model) => `<option value="${escapeHtml(model)}"></option>`)
-      .join("");
-    if (!fields.model.value && models[0]) {
-      fields.model.value = models[0];
-      scheduleSettingsSave();
-    }
-    showStatus(t("options.modelsLoaded", { count: models.length }, currentLanguage()));
-  }
-
   async function handleClearMemories() {
     const total = Object.keys(currentMemories).length;
     if (!total) {
@@ -304,6 +247,10 @@
 
   function openHistoryPage(tab) {
     chrome.tabs.create({ url: chrome.runtime.getURL(`src/history/history.html${tab === "annotations" ? "?tab=annotations" : ""}`) });
+  }
+
+  function openOnboarding() {
+    chrome.tabs.create({ url: chrome.runtime.getURL("src/onboarding/onboarding.html?restart=1&source=settings") });
   }
 
   function currentLanguage() {

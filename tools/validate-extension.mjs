@@ -130,6 +130,8 @@ const requiredFiles = new Set([
   "src/background/background.js",
   "src/shared/constants.js",
   "src/shared/annotations.js",
+  "src/shared/settings-form.js",
+  "src/shared/onboarding.js",
   "src/content/annotation-runtime.js",
   "src/content/content-ui.js",
   "src/content/content.js",
@@ -142,11 +144,15 @@ const requiredFiles = new Set([
   "src/history/history.html",
   "src/history/history.css",
   "src/history/history.js"
+  ,"src/onboarding/onboarding.html"
+  ,"src/onboarding/onboarding.css"
+  ,"src/onboarding/onboarding.js"
   ,"tests/annotation-format.test.mjs"
   ,"tests/annotation-state.test.mjs"
   ,"tests/annotation-match.test.mjs"
   ,"tests/annotation-storage.test.mjs"
   ,"tests/content-ui.test.mjs"
+  ,"tests/onboarding-state.test.mjs"
   ,"tests/fixtures/annotation-playground.html"
   ,"tools/serve-fixtures.mjs"
 ]);
@@ -227,12 +233,15 @@ for (const [declaredSize, iconPath] of Object.entries(manifest.action?.default_i
   "src/background/background.js",
   "src/shared/constants.js",
   "src/shared/annotations.js",
+  "src/shared/settings-form.js",
+  "src/shared/onboarding.js",
   "src/content/annotation-runtime.js",
   "src/content/content-ui.js",
   "src/content/content.js",
   "src/popup/popup.js",
   "src/options/options.js",
   "src/history/history.js"
+  ,"src/onboarding/onboarding.js"
 ].forEach(checkJavaScript);
 
 if (process.exitCode) {

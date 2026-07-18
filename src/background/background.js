@@ -15,6 +15,10 @@ ensureStorageSchema(chrome.storage.local).catch((error) => {
   console.warn("[这是啥来着] Storage schema init failed:", error);
 });
 
+chrome.runtime.onInstalled.addListener((details) => {
+  initializeOnboarding(details).catch((error) => console.warn("[这是啥来着] Onboarding init failed:", error));
+});
+
 chrome.runtime.onConnect.addListener((port) => {
   if (port.name !== PORTS.stream) {
     return;
@@ -56,6 +60,13 @@ chrome.runtime.onConnect.addListener((port) => {
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message?.type === MESSAGE_TYPES.openOnboarding) {
+    maybeOpenOnboarding(false)
+      .then((opened) => sendResponse({ ok: true, opened }))
+      .catch((error) => sendResponse({ ok: false, error: String(error?.message || error) }));
+    return true;
+  }
+
   if (message?.type === MESSAGE_TYPES.testApi) {
     testApiConnection(message.payload?.settingsOverride)
       .then((result) => sendResponse({ ok: true, result }))
@@ -74,6 +85,47 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   return false;
 });
+
+async function initializeOnboarding(details) {
+  await ensureStorageSchema(chrome.storage.local);
+  const stored = await chrome.storage.local.get([
+    STORAGE_KEYS.onboardingCompleted,
+    STORAGE_KEYS.onboardingVersion,
+    STORAGE_KEYS.onboardingLastStep
+  ]);
+  if (details?.reason === "install") {
+    await chrome.storage.local.set({
+      [STORAGE_KEYS.onboardingCompleted]: false,
+      [STORAGE_KEYS.onboardingVersion]: 1,
+      [STORAGE_KEYS.onboardingLastStep]: 0
+    });
+    await maybeOpenOnboarding(true);
+    return;
+  }
+  if (stored[STORAGE_KEYS.onboardingCompleted] === undefined) {
+    await chrome.storage.local.set({
+      [STORAGE_KEYS.onboardingCompleted]: true,
+      [STORAGE_KEYS.onboardingVersion]: 1,
+      [STORAGE_KEYS.onboardingLastStep]: 0
+    });
+  }
+}
+
+async function maybeOpenOnboarding(force) {
+  const stored = await chrome.storage.local.get(STORAGE_KEYS.onboardingCompleted);
+  if (!force && stored[STORAGE_KEYS.onboardingCompleted] === true) return false;
+  const sessionKey = "inlineai_onboarding_opened_this_session";
+  if (chrome.storage.session) {
+    const session = await chrome.storage.session.get(sessionKey);
+    if (!force && session[sessionKey]) return false;
+    await chrome.storage.session.set({ [sessionKey]: true });
+  } else if (!force && maybeOpenOnboarding.opened) {
+    return false;
+  }
+  maybeOpenOnboarding.opened = true;
+  await chrome.tabs.create({ url: chrome.runtime.getURL("src/onboarding/onboarding.html") });
+  return true;
+}
 
 async function getSettings(override) {
   const stored = await chrome.storage.local.get(STORAGE_KEYS.settings);

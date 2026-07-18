@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>这是啥来着 快速教程</title>
+    <link rel="stylesheet" href="./onboarding.css">
+  </head>
+  <body>
+    <main class="onboarding-shell" aria-labelledby="step-title">
+      <header class="onboarding-header">
+        <div class="brand"><img src="../../assets/icon48.png" alt=""><span data-label="app-name">这是啥来着</span></div>
+        <button id="skip" class="text-button" type="button">跳过教程</button>
+      </header>
+
+      <div class="progress-row">
+        <p id="progress-text">第 1 步，共 8 步</p>
+        <div id="progress-dots" class="progress-dots" aria-hidden="true"></div>
+      </div>
+
+      <section class="step-card">
+        <div id="step-mark" class="step-mark" aria-hidden="true"></div>
+        <div class="step-copy">
+          <h1 id="step-title" tabindex="-1"></h1>
+          <p id="step-body"></p>
+        </div>
+
+        <section id="connection-panel" class="connection-panel hidden" aria-label="模型连接设置">
+          <div class="connection-grid">
+            <label><span id="provider-label">模型提供商</span><select data-connection-field="modelProvider"></select></label>
+            <label><span>API Base URL</span><input data-connection-field="apiBaseUrl" type="url" autocomplete="off" placeholder="https://api.deepseek.com/v1"></label>
+            <label><span>API Key</span><input data-connection-field="apiKey" type="password" autocomplete="off" placeholder="sk-..."></label>
+            <label><span>Model</span><input data-connection-field="model" type="text" list="onboarding-model-list" autocomplete="off" placeholder="deepseek-chat"><datalist id="onboarding-model-list" data-connection-model-list></datalist></label>
+          </div>
+          <div class="connection-actions">
+            <button type="button" data-connection-action="refresh-models" id="refresh-models">刷新模型列表</button>
+            <button type="button" data-connection-action="test" id="test-connection" class="primary">测试连接</button>
+          </div>
+          <p id="connection-status" class="connection-status" role="status" aria-live="polite"></p>
+        </section>
+      </section>
+
+      <footer class="onboarding-footer">
+        <button id="back" type="button">上一步</button>
+        <button id="next" class="primary" type="button">下一步</button>
+      </footer>
+    </main>
+
+    <script src="../shared/constants.js"></script>
+    <script src="../shared/settings-form.js"></script>
+    <script src="../shared/onboarding.js"></script>
+    <script src="./onboarding.js"></script>
+  </body>
+</html>

@@ -1,0 +1,84 @@
+:root {
+  color-scheme: light;
+  --ink: #2c2416;
+  --muted: #756e61;
+  --paper: #fdfaf0;
+  --paper-soft: #f7f2e4;
+  --wash: #eee7d5;
+  --line: #d8cfba;
+  --accent: #c98257;
+  --accent-strong: #914a20;
+  --accent-soft: rgba(201, 130, 87, 0.16);
+  --accent-line: rgba(201, 130, 87, 0.34);
+  --accent-shadow: rgba(145, 74, 32, 0.24);
+  --danger: #b42318;
+  font-family: ui-serif, "Songti SC", "Noto Serif CJK SC", STSong, Georgia, serif;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  color: var(--ink);
+  background-color: var(--wash);
+  background-image:
+    linear-gradient(135deg, var(--accent-soft), transparent 42%),
+    url("data:image/svg+xml,%3Csvg width='180' height='180' viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitchTiles'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.025'/%3E%3C/svg%3E");
+}
+
+button, input, select { font: 650 14px/1.2 ui-sans-serif, system-ui, sans-serif; }
+button { min-height: 38px; border: 1px solid var(--line); border-radius: 5px; padding: 8px 14px; background: var(--paper); color: var(--ink); cursor: pointer; }
+button:hover, button:focus-visible { border-color: var(--accent); outline: 3px solid var(--accent-soft); }
+button:disabled { cursor: default; opacity: .4; }
+button.primary { border-color: var(--accent-strong); background: var(--accent-strong); color: #fff; box-shadow: 0 7px 18px var(--accent-shadow); }
+button.text-button { min-height: 32px; border-color: transparent; background: transparent; color: var(--muted); box-shadow: none; }
+
+.onboarding-shell {
+  width: min(780px, 100%);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 20px;
+  background: linear-gradient(180deg, rgba(255,255,255,.7), rgba(253,250,240,.94));
+  box-shadow: 0 4px 14px rgba(44,36,22,.1), 0 24px 70px rgba(44,36,22,.14);
+}
+.onboarding-header, .onboarding-footer, .progress-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.onboarding-header { border-bottom: 1px solid var(--line); padding-bottom: 15px; }
+.brand { display: flex; align-items: center; gap: 9px; font-weight: 750; }
+.brand img { width: 30px; height: 30px; }
+.progress-row { padding: 14px 2px 12px; color: var(--muted); font: 700 12px/1.2 ui-sans-serif, system-ui, sans-serif; }
+.progress-row p { margin: 0; }
+.progress-dots { display: flex; gap: 5px; }
+.progress-dots span { width: 18px; height: 3px; border-radius: 999px; background: var(--line); }
+.progress-dots span.active { background: var(--accent-strong); }
+.step-card { min-height: 380px; border: 1px solid var(--line); border-radius: 5px; padding: clamp(22px, 5vw, 44px); background: var(--paper); box-shadow: inset 0 1px rgba(255,255,255,.8); }
+.step-mark { width: 46px; height: 5px; margin-bottom: 24px; border-radius: 999px; background: var(--accent-strong); box-shadow: 16px 0 0 var(--accent-soft); }
+.step-copy { max-width: 650px; }
+h1 { margin: 0; font-size: clamp(26px, 5vw, 42px); line-height: 1.16; letter-spacing: -.02em; }
+#step-body { max-width: 620px; margin: 16px 0 0; color: var(--muted); font-size: 17px; line-height: 1.8; }
+.connection-panel { margin-top: 28px; border-top: 1px solid var(--line); padding-top: 22px; }
+.hidden { display: none !important; }
+.connection-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+label { display: grid; gap: 6px; color: var(--muted); font: 700 12px/1.2 ui-sans-serif, system-ui, sans-serif; }
+input, select { width: 100%; min-height: 40px; border: 1px solid var(--line); border-radius: 5px; padding: 8px 10px; background: #fffef9; color: var(--ink); }
+input:focus, select:focus { border-color: var(--accent); outline: 3px solid var(--accent-soft); }
+.connection-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+.connection-status { min-height: 20px; margin: 10px 0 0; color: var(--accent-strong); font: 650 13px/1.4 ui-sans-serif, system-ui, sans-serif; }
+.connection-status.error { color: var(--danger); }
+.onboarding-footer { padding-top: 16px; }
+
+@media (max-width: 620px) {
+  body { padding: 10px; align-items: start; }
+  .onboarding-shell { padding: 14px; }
+  .step-card { min-height: 430px; padding: 26px 20px; }
+  .connection-grid { grid-template-columns: 1fr; }
+  .connection-actions { flex-wrap: wrap; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 1ms !important; animation: none !important; }
+}

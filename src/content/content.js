@@ -103,6 +103,7 @@
     createShadowUi();
     injectMemoryStyle();
     bindEvents();
+    chrome.runtime.sendMessage({ type: MESSAGE_TYPES.openOnboarding }).catch(() => {});
     scheduleHighlight();
     await loadActiveAnnotationBatch();
   }

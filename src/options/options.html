@@ -21,25 +21,25 @@
           <h2 data-i18n="options.api">API</h2>
           <label>
             <span data-i18n="options.modelProvider">模型提供商</span>
-            <select id="modelProvider" name="modelProvider"></select>
+            <select id="modelProvider" name="modelProvider" data-connection-field="modelProvider"></select>
           </label>
           <label>
             API Base URL
-            <input id="apiBaseUrl" name="apiBaseUrl" type="url" placeholder="https://api.deepseek.com/v1" autocomplete="off">
+            <input id="apiBaseUrl" name="apiBaseUrl" type="url" placeholder="https://api.deepseek.com/v1" autocomplete="off" data-connection-field="apiBaseUrl">
           </label>
           <label>
             API Key
-            <input id="apiKey" name="apiKey" type="password" placeholder="sk-..." autocomplete="off">
+            <input id="apiKey" name="apiKey" type="password" placeholder="sk-..." autocomplete="off" data-connection-field="apiKey">
           </label>
           <label>
             Model
-            <input id="model" name="model" type="text" list="model-list" placeholder="deepseek-chat" autocomplete="off">
-            <datalist id="model-list"></datalist>
+            <input id="model" name="model" type="text" list="model-list" placeholder="deepseek-chat" autocomplete="off" data-connection-field="model">
+            <datalist id="model-list" data-connection-model-list></datalist>
           </label>
           <div class="actions">
             <button class="button primary" type="submit" data-i18n="options.saveSettings">保存设置</button>
-            <button class="button" id="refresh-models" type="button" data-i18n="options.refreshModels">刷新模型列表</button>
-            <button class="button" id="test-api" type="button" data-i18n="options.testConnection">测试连接</button>
+            <button class="button" id="refresh-models" type="button" data-i18n="options.refreshModels" data-connection-action="refresh-models">刷新模型列表</button>
+            <button class="button" id="test-api" type="button" data-i18n="options.testConnection" data-connection-action="test">测试连接</button>
           </div>
           <p class="hint" data-i18n="options.apiHint">拉不到模型列表时，仍可直接手动填写 OpenAI-compatible 模型名。本地 Ollama/LM Studio 可以留空 API Key。</p>
         </section>
@@ -82,6 +82,11 @@
           <p class="hint" data-i18n="options.themeHint">主题色会同步到圆点、输入框、回答框和工具栏弹窗。</p>
         </section>
 
+        <section class="section">
+          <h2 data-i18n="options.help">帮助</h2>
+          <button class="button" id="open-onboarding" type="button" data-i18n="options.reopenOnboarding">重新查看快速教程</button>
+        </section>
+
         <section class="section danger-zone">
           <h2 data-i18n="options.historyData">历史数据</h2>
           <p id="memory-count" class="hint" data-i18n="options.memoryInitial">已保存 0 条记忆。</p>
@@ -97,6 +102,7 @@
     </main>
 
     <script src="../shared/constants.js"></script>
+    <script src="../shared/settings-form.js"></script>
     <script src="./options.js"></script>
   </body>
 </html>
