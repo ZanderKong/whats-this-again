@@ -30,6 +30,7 @@
         "src/shared/constants.js",
         "src/shared/annotations.js",
         "src/content/annotation-runtime.js",
+        "src/content/content-ui.js",
         "src/content/content.js"
       ],
       "run_at": "document_idle"

@@ -6,7 +6,8 @@
   const C = globalThis.InlineAIConstants;
   const A = globalThis.InlineAIAnnotations;
   const AR = globalThis.InlineAIAnnotationRuntime;
-  if (!C || !A || !AR) {
+  const UI = globalThis.InlineAIContentUi;
+  if (!C || !A || !AR || !UI) {
     console.warn("[这是啥来着] Missing shared constants.");
     return;
   }
@@ -40,6 +41,9 @@
   let shadow = null;
   let bubble = null;
   let panel = null;
+  let interactionStack = null;
+  let answerSurface = null;
+  let composerSurface = null;
   let toast = null;
   let historyHint = null;
   let historyHintLine = null;
@@ -197,6 +201,141 @@
           box-shadow: var(--iai-shadow);
           overflow: hidden;
           pointer-events: auto;
+        }
+        .interaction-stack {
+          position: fixed;
+          display: grid;
+          gap: 8px;
+          width: min(540px, calc(100vw - 24px));
+          min-width: min(300px, calc(100vw - 24px));
+          max-height: calc(100vh - 24px);
+          pointer-events: none;
+        }
+        .interaction-stack > * { pointer-events: auto; }
+        .interaction-stack .interaction-surface {
+          position: relative;
+          inset: auto;
+          width: 100%;
+          min-width: 0;
+          max-height: min(610px, calc(100vh - 112px));
+          border-radius: 5px;
+          background: linear-gradient(180deg, var(--iai-paper) 0%, #fbf8ef 100%);
+          box-shadow: 0 2px 7px rgba(44, 36, 22, 0.1), 0 12px 34px rgba(44, 36, 22, 0.12);
+        }
+        .interaction-stack .answer-surface .surface-header {
+          min-height: 42px;
+          background: rgba(var(--iai-accent-rgb), 0.06);
+        }
+        .interaction-stack .answer-surface .surface-body {
+          max-height: calc(min(610px, 100vh - 112px) - 44px);
+          font-family: ui-serif, "Songti SC", "Noto Serif CJK SC", STSong, Georgia, serif;
+        }
+        .composer-surface {
+          position: relative;
+          width: 100%;
+          border: 1px solid rgba(44, 36, 22, 0.2);
+          border-radius: 5px;
+          padding: 8px 9px;
+          background: linear-gradient(180deg, #fffef9 0%, #fbf7ed 100%);
+          box-shadow: 0 2px 6px rgba(44, 36, 22, 0.08), 0 9px 24px rgba(44, 36, 22, 0.1);
+        }
+        .composer-inner {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) auto;
+          gap: 8px;
+          align-items: end;
+        }
+        .composer-surface textarea {
+          min-height: 36px;
+          max-height: 88px;
+          border: 0;
+          padding: 8px 7px;
+          background: transparent;
+          box-shadow: none;
+          color: var(--iai-ink);
+          font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+        }
+        .composer-surface textarea:focus { outline: none; }
+        .composer-surface:focus-within {
+          border-color: var(--iai-accent);
+          box-shadow: 0 0 0 3px var(--iai-accent-soft), 0 9px 24px rgba(44, 36, 22, 0.1);
+        }
+        .composer-actions {
+          display: flex;
+          gap: 7px;
+          align-items: center;
+          padding-bottom: 1px;
+        }
+        .composer-annotation,
+        .composer-send,
+        .composer-close {
+          border: 1px solid rgba(var(--iai-accent-rgb), 0.38);
+          background: transparent;
+          color: var(--iai-accent-strong);
+          cursor: pointer;
+          font: 700 12px/1 ui-sans-serif, system-ui, sans-serif;
+          transition: background 140ms ease, color 140ms ease, transform 120ms ease, box-shadow 140ms ease;
+        }
+        .composer-annotation {
+          display: inline-flex;
+          min-height: 34px;
+          align-items: center;
+          gap: 5px;
+          border-radius: 999px;
+          padding: 0 10px;
+        }
+        .composer-send {
+          display: grid;
+          width: 34px;
+          height: 34px;
+          place-items: center;
+          border-radius: 50%;
+          padding: 0;
+        }
+        .composer-close {
+          position: absolute;
+          top: -9px;
+          right: -9px;
+          z-index: 1;
+          display: grid;
+          width: 24px;
+          height: 24px;
+          place-items: center;
+          border-color: var(--iai-line);
+          border-radius: 50%;
+          background: var(--iai-paper);
+          color: var(--iai-muted);
+          font-size: 17px;
+        }
+        .composer-annotation:hover,
+        .composer-annotation:focus-visible,
+        .composer-send:hover,
+        .composer-send:focus-visible {
+          outline: none;
+          background: var(--iai-accent-strong);
+          color: #fff;
+          box-shadow: 0 6px 16px rgba(var(--iai-accent-rgb), 0.22);
+          transform: translateY(-1px);
+        }
+        .composer-close:hover,
+        .composer-close:focus-visible {
+          outline: none;
+          color: var(--iai-warn);
+          box-shadow: 0 4px 12px rgba(44, 36, 22, 0.14);
+        }
+        .composer-annotation:active,
+        .composer-send:active { transform: scale(0.96); }
+        .composer-annotation:disabled,
+        .composer-send:disabled,
+        .composer-surface textarea:disabled { cursor: default; opacity: 0.48; }
+        .action-icon {
+          width: 16px;
+          height: 16px;
+          fill: none;
+          stroke: currentColor;
+          stroke-width: 1.6;
+          stroke-linecap: round;
+          stroke-linejoin: round;
         }
         .surface.collapsed {
           width: auto !important;
@@ -714,8 +853,12 @@
         .annotation-action { color: var(--iai-accent-strong); border-color: rgba(var(--iai-accent-rgb), .32); }
         @media (max-width: 520px) {
           .surface { width: calc(100vw - 18px); }
+          .interaction-stack { width: calc(100vw - 18px); min-width: 0; }
           .term-title { max-width: calc(100vw - 120px); font-size: 16px; }
           .surface-body { padding: 10px; }
+          .composer-surface { padding: 7px; }
+          .composer-annotation span { display: none; }
+          .composer-annotation { width: 34px; padding: 0; justify-content: center; }
         }
         @media (prefers-reduced-motion: reduce) {
           #annotation-basket,
@@ -724,6 +867,9 @@
             transition-duration: 1ms !important;
           }
           #annotation-basket.compacting { transform: none; }
+          .composer-annotation,
+          .composer-send,
+          .composer-close { transition-duration: 1ms !important; }
         }
       </style>
       <button id="bubble" class="hidden" type="button" title="${escapeHtml(t("content.bubbleTitle", currentLanguage()))}" aria-label="${escapeHtml(t("content.bubbleTitle", currentLanguage()))}"></button>
@@ -732,12 +878,16 @@
       <div id="annotation-highlight-layer" aria-hidden="true"></div>
       <div id="editor-drop-target" class="hidden" aria-hidden="true"><span></span></div>
       <button id="annotation-basket" class="hidden" draggable="true" type="button" data-action="open-annotation-basket" aria-live="polite"></button>
+      ${UI.interactionShell(t("app.dialogLabel", currentLanguage()))}
       <section id="panel" class="surface hidden" role="dialog" aria-modal="false" aria-label="${escapeHtml(t("app.dialogLabel", currentLanguage()))}"></section>
       <div id="toast" class="hidden"></div>
     `;
 
     bubble = shadow.getElementById("bubble");
     panel = shadow.getElementById("panel");
+    interactionStack = shadow.getElementById("interaction-stack");
+    answerSurface = shadow.getElementById("answer-surface");
+    composerSurface = shadow.getElementById("composer-surface");
     toast = shadow.getElementById("toast");
     historyHint = shadow.getElementById("history-hint");
     historyHintLine = shadow.getElementById("history-hint-line");
@@ -994,7 +1144,7 @@
       return;
     }
 
-    if (event.key === "Enter" && !event.shiftKey && event.target?.matches?.("textarea")) {
+    if (event.key === "Enter" && !event.shiftKey && !event.isComposing && event.keyCode !== 229 && event.target?.matches?.("textarea")) {
       event.preventDefault();
       sendQuestion({ followup: Boolean(panelState?.currentCard) });
     }
@@ -1017,16 +1167,19 @@
     const resizeHandle = event.target?.closest?.(".resize-handle");
     if (resizeHandle) {
       const surface = resizeHandle.closest(".surface");
-      const rect = surface.getBoundingClientRect();
+      const motionTarget = surface.closest(".interaction-stack") || surface;
+      const rect = motionTarget.getBoundingClientRect();
+      const heightRect = surface.getBoundingClientRect();
       resizeState = {
-        surface,
+        surface: motionTarget,
+        heightTarget: motionTarget === interactionStack ? surface : motionTarget,
         corner: resizeHandle.dataset.resize,
         startX: event.clientX,
         startY: event.clientY,
         left: rect.left,
         top: rect.top,
         width: rect.width,
-        height: rect.height
+        height: heightRect.height
       };
       event.preventDefault();
       return;
@@ -1038,9 +1191,10 @@
     }
 
     const surface = header.closest(".surface");
-    const rect = surface.getBoundingClientRect();
+    const motionTarget = surface.closest(".interaction-stack") || surface;
+    const rect = motionTarget.getBoundingClientRect();
     dragState = {
-      surface,
+      surface: motionTarget,
       startX: event.clientX,
       startY: event.clientY,
       left: rect.left,
@@ -1119,7 +1273,7 @@
     state.surface.style.left = `${left}px`;
     state.surface.style.top = `${top}px`;
     state.surface.style.width = `${width}px`;
-    state.surface.style.height = `${height}px`;
+    state.heightTarget.style.height = `${height}px`;
   }
 
   function handleBubblePointerDown(event) {
@@ -1416,43 +1570,31 @@
 
   function renderQuestionPanel() {
     panelState.mode = "inputReady";
-    panel.className = panelClass();
-    panel.innerHTML = surfaceShell(panelState.term, "", `
-      <div class="prompt-composer annotation-enabled">
-        <textarea id="inlineai-question" maxlength="${LIMITS.maxAnnotationNoteLength}" aria-label="${escapeHtml(t("content.customQuestionAria", currentLanguage()))}" placeholder="${escapeHtml(t("content.askPlaceholder", currentLanguage()))}" rows="1"></textarea>
-        <button class="button annotation-action" type="button" data-action="save-annotation">${escapeHtml(t("content.annotation", currentLanguage()))}</button>
-        <button class="button send-round" type="button" data-action="send-new" title="${escapeHtml(t("content.send", currentLanguage()))}" aria-label="${escapeHtml(t("content.send", currentLanguage()))}">↑</button>
-      </div>
-      <div id="inlineai-error" class="notice error hidden"></div>
-      <div id="inlineai-response" class="response hidden"></div>
-    `);
+    showInteractionSurfaces({ answer: false, composer: true });
+    renderComposerSurface({ followup: false, annotation: true, close: true });
     focusQuestionSoon();
   }
 
   function renderAnswerPanel({ loading = false } = {}) {
     panelState.mode = loading ? "answerLoading" : (panelState.savedMemoryId || panelState.currentCard?.memory ? "savedThread" : "answerReady");
-    panel.className = panelClass();
-    panel.innerHTML = surfaceShell(panelState.term, "", `
+    showInteractionSurfaces({ answer: true, composer: true });
+    answerSurface.className = answerSurfaceClass();
+    answerSurface.innerHTML = surfaceShell(panelState.term, "", `
       ${renderThread(panelState.currentCard, { loading })}
-      ${!loading && panelState.currentCard ? renderFollowupComposer() : ""}
-      <div id="inlineai-error" class="notice error hidden"></div>
       <div id="inlineai-actions-after" class="actions">${loading ? "" : answerActions()}</div>
     `);
+    renderComposerSurface({ followup: true, disabled: loading });
     updateSelectionActions();
   }
 
   function renderFollowupPanel() {
     panelState.mode = "followupInput";
-    panel.className = panelClass();
-    panel.innerHTML = surfaceShell(panelState.term, "", `
+    showInteractionSurfaces({ answer: true, composer: true });
+    answerSurface.className = answerSurfaceClass();
+    answerSurface.innerHTML = surfaceShell(panelState.term, "", `
       ${renderThread(panelState.currentCard)}
-      <div class="prompt-composer">
-        <textarea id="inlineai-question" aria-label="${escapeHtml(t("content.followupAria", currentLanguage()))}" placeholder="${escapeHtml(t("content.followupPlaceholder", currentLanguage()))}" rows="1"></textarea>
-        <button class="button send-round" type="button" data-action="send-followup" title="${escapeHtml(t("content.send", currentLanguage()))}" aria-label="${escapeHtml(t("content.send", currentLanguage()))}">↑</button>
-      </div>
-      <div id="inlineai-error" class="notice error hidden"></div>
-      <div id="inlineai-response" class="response hidden"></div>
     `);
+    renderComposerSurface({ followup: true });
     focusQuestionSoon();
   }
 
@@ -1474,12 +1616,35 @@
       collapsed: false
     };
 
-    panel.className = panelClass();
-    panel.innerHTML = surfaceShell(panelState.term, "", `
+    showInteractionSurfaces({ answer: true, composer: false });
+    answerSurface.className = answerSurfaceClass();
+    answerSurface.innerHTML = surfaceShell(panelState.term, "", `
       ${renderMemoryCards(cards)}
-      <div id="inlineai-error" class="notice error hidden"></div>
     `);
     showPanel(anchorRect);
+  }
+
+  function showInteractionSurfaces(visible) {
+    panel?.classList.add("hidden");
+    interactionStack?.classList.remove("hidden");
+    answerSurface?.classList.toggle("hidden", !visible.answer);
+    composerSurface?.classList.toggle("hidden", !visible.composer);
+  }
+
+  function renderComposerSurface({ followup = false, annotation = false, close = false, disabled = false } = {}) {
+    composerSurface.innerHTML = UI.composerMarkup({
+      action: followup ? "send-followup" : "send-new",
+      annotation,
+      close,
+      disabled,
+      maxLength: LIMITS.maxAnnotationNoteLength,
+      annotationText: t("content.annotation", currentLanguage()),
+      annotationLabel: t("content.saveAnnotation", currentLanguage()),
+      inputLabel: t(followup ? "content.followupAria" : "content.customQuestionAria", currentLanguage()),
+      placeholder: t(followup ? "content.followupComposerPlaceholder" : "content.askPlaceholder", currentLanguage()),
+      sendLabel: t(followup ? "content.sendFollowup" : "content.sendQuestion", currentLanguage()),
+      closeLabel: t("content.close", currentLanguage())
+    });
   }
 
   function surfaceShell(term, _eyebrow, body, options = {}) {
@@ -1572,15 +1737,6 @@
     `;
   }
 
-  function renderFollowupComposer() {
-    return `
-      <div class="prompt-composer compact">
-        <textarea id="inlineai-question" aria-label="${escapeHtml(t("content.followupAria", currentLanguage()))}" placeholder="${escapeHtml(t("content.followupComposerPlaceholder", currentLanguage()))}" rows="1"></textarea>
-        <button class="button send-round" type="button" data-action="send-followup" title="${escapeHtml(t("content.send", currentLanguage()))}" aria-label="${escapeHtml(t("content.send", currentLanguage()))}">↑</button>
-      </div>
-    `;
-  }
-
   function displayQuery(item, term) {
     const query = typeof item === "string" ? item : item?.query;
     const normalized = normalizeVisibleText(query);
@@ -1614,11 +1770,11 @@
       return;
     }
 
-    if (followup && panelState.currentCard) {
-      renderAnswerPanel({ loading: true });
-    }
+    panelState.pendingQuery = question;
+    panelState.pendingQueryKind = queryKind;
+    renderAnswerPanel({ loading: true });
     const responseNode = ensureResponseNode();
-    const buttons = Array.from(panel.querySelectorAll("button,select"));
+    const controls = Array.from(interactionStack.querySelectorAll("button,select,textarea"));
     const previousResponse = threadToText(panelState.currentCard);
     let answer = "";
 
@@ -1626,9 +1782,9 @@
     clearError();
     responseNode.classList.remove("hidden");
     responseNode.innerHTML = "";
-    buttons.forEach((button) => {
-      if (button.dataset.action !== "close") {
-        button.disabled = true;
+    controls.forEach((control) => {
+      if (control.dataset.action !== "close") {
+        control.disabled = true;
       }
     });
 
@@ -1666,8 +1822,8 @@
     } catch (error) {
       showError(humanizeContentError(error), true);
     } finally {
-      buttons.forEach((button) => {
-        button.disabled = false;
+      interactionStack.querySelectorAll("button,select,textarea").forEach((control) => {
+        control.disabled = false;
       });
     }
   }
@@ -1792,14 +1948,15 @@
     removeLocalMarksForMemory(memoryId);
     scheduleHighlight();
     if (memories[memoryId]) {
-      renderHistoryPanel([memories[memoryId]], rectToObject(panel.getBoundingClientRect()));
+      renderHistoryPanel([memories[memoryId]], rectToObject(interactionStack.getBoundingClientRect()));
       return;
     }
     if (panelState) {
       panelState.currentCard = null;
       panelState.savedMemoryId = "";
-      panel.className = panelClass();
-      panel.innerHTML = surfaceShell(panelState.term, "", `
+      showInteractionSurfaces({ answer: true, composer: false });
+      answerSurface.className = answerSurfaceClass();
+      answerSurface.innerHTML = surfaceShell(panelState.term, "", `
         <div class="notice">${escapeHtml(t("content.recordDeleted", currentLanguage()))}</div>
       `);
     }
@@ -1809,7 +1966,7 @@
     if (!surface) {
       return;
     }
-    if (surface.id === "panel" && panelState) {
+    if ((surface.id === "panel" || surface.id === "answer-surface") && panelState) {
       panelState.collapsed = !panelState.collapsed;
       surface.classList.toggle("collapsed", panelState.collapsed);
       return;
@@ -1847,6 +2004,15 @@
     ].filter(Boolean).join(" ");
   }
 
+  function answerSurfaceClass() {
+    return [
+      "surface",
+      "interaction-surface",
+      "answer-surface",
+      panelState?.collapsed ? "collapsed" : ""
+    ].filter(Boolean).join(" ");
+  }
+
   function applyThemeVars() {
     if (!host) {
       return;
@@ -1862,7 +2028,10 @@
   }
 
   function panelIsOpen() {
-    return Boolean(panel && !panel.classList.contains("hidden"));
+    return Boolean(
+      (panel && !panel.classList.contains("hidden")) ||
+      (interactionStack && !interactionStack.classList.contains("hidden"))
+    );
   }
 
   function pinCurrentPanelSnapshot() {
@@ -1870,10 +2039,16 @@
       return;
     }
 
-    const snapshot = panel.cloneNode(true);
+    const source = answerSurface && !answerSurface.classList.contains("hidden") ? answerSurface : panel;
+    const sourceRect = source === answerSurface ? interactionStack.getBoundingClientRect() : source.getBoundingClientRect();
+    const snapshot = source.cloneNode(true);
     snapshot.id = createId("pinned");
     snapshot.dataset.inlineaiPinnedPanel = String(++pinnedPanelCounter);
-    snapshot.classList.remove("hidden");
+    snapshot.classList.remove("hidden", "interaction-surface", "answer-surface");
+    snapshot.style.left = `${sourceRect.left}px`;
+    snapshot.style.top = `${sourceRect.top}px`;
+    snapshot.style.width = `${sourceRect.width}px`;
+    snapshot.style.height = `${Math.min(sourceRect.height, window.innerHeight - 24)}px`;
     snapshot.querySelectorAll("[id]").forEach((node) => node.removeAttribute("id"));
     snapshot.querySelectorAll("textarea,input,select").forEach((node) => {
       node.disabled = true;
@@ -1889,7 +2064,7 @@
       }
       node.setAttribute("aria-disabled", "true");
     });
-    shadow.insertBefore(snapshot, panel);
+    shadow.insertBefore(snapshot, interactionStack);
   }
 
   function closePinnedPanel(button) {
@@ -2123,8 +2298,9 @@
 
   function showPanel(anchorRect) {
     hideHistoryHint();
-    panel.classList.remove("hidden");
-    window.requestAnimationFrame(() => positionElement(panel, anchorRect, { mode: "panel" }));
+    const target = panelState?.mode === "annotations" ? panel : interactionStack;
+    target.classList.remove("hidden");
+    window.requestAnimationFrame(() => positionElement(target, anchorRect, { mode: "panel" }));
   }
 
   function closePanel() {
@@ -2134,6 +2310,10 @@
     }
     panel?.classList.add("hidden");
     panel?.classList.remove("collapsed");
+    interactionStack?.classList.add("hidden");
+    answerSurface?.classList.add("hidden");
+    answerSurface?.classList.remove("collapsed");
+    composerSurface?.classList.add("hidden");
     panelState = null;
   }
 
@@ -2228,7 +2408,7 @@
   function ensureResponseNode() {
     let responseNode = shadow.getElementById("inlineai-response");
     if (!responseNode) {
-      const body = panel.querySelector(".surface-body");
+      const body = answerSurface.querySelector(".surface-body");
       responseNode = document.createElement("div");
       responseNode.id = "inlineai-response";
       responseNode.className = "response";
@@ -2343,6 +2523,7 @@
     if (panel) {
       panel.setAttribute("aria-label", t("app.dialogLabel", currentLanguage()));
     }
+    interactionStack?.setAttribute("aria-label", t("app.dialogLabel", currentLanguage()));
     if (activeAnnotationBatch) {
       renderAnnotationBasket(false);
     }
@@ -2563,6 +2744,7 @@
 
   function renderAnnotationPanel(editingId) {
     if (!activeAnnotationBatch) return closePanel();
+    interactionStack?.classList.add("hidden");
     const items = A.sortItems(activeAnnotationBatch.items);
     const info = A.payloadInfo(activeAnnotationBatch, currentLanguage());
     panelState = { mode: "annotations", editingAnnotationId: editingId || "", collapsed: false };
