@@ -153,6 +153,7 @@ const requiredFiles = new Set([
   ,"tests/annotation-storage.test.mjs"
   ,"tests/content-ui.test.mjs"
   ,"tests/onboarding-state.test.mjs"
+  ,"tests/ui-contract.test.mjs"
   ,"tests/fixtures/annotation-playground.html"
   ,"tools/serve-fixtures.mjs"
 ]);

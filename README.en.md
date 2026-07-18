@@ -16,8 +16,8 @@ This repository provides the source form of an unpacked extension:
 2. Turn on **Developer mode** in the upper-right corner.
 3. Click **Load unpacked**. In Chinese browser UI, this may appear as **「加载已解包扩展」** or **「加载已解压的扩展程序」**.
 4. Select the project root that contains `manifest.json`.
-5. Open the 「这是啥来着」 settings page and configure provider, API Base URL, API Key, and model name.
-6. Refresh the target page and start selecting text.
+5. A first-run quick start opens automatically and lets you configure and test the model connection.
+6. Complete or skip it, then refresh the target page and start selecting text. You can reopen the walkthrough from Settings.
 
 Browser internal pages, Chrome Web Store pages, and other extension pages cannot run content scripts because of Chrome security restrictions.
 
@@ -65,7 +65,7 @@ Click an image to open the full-size version.
 
 ## Current Version
 
-- Extension version: `0.4.0`
+- Extension version: `0.5.0`
 - Manifest: Chrome Manifest V3
 - Landing page: `docs/index.html`
 - Storage: `chrome.storage.local`
@@ -75,6 +75,8 @@ Click an image to open the full-size version.
 - **Selected-text explanations**: select a word, acronym, or phrase and click the small dot near the selection.
 - **Context awareness**: optionally send nearby page context to improve the explanation.
 - **Custom questions**: long-press the dot to ask your own question.
+- **Independent answer and composer surfaces**: avoid nested white cards while preserving a single movable interaction stack.
+- **First-run quick start**: an eight-step walkthrough covers model setup, selection, follow-ups, saving, and annotations.
 - **Follow-ups**: continue asking about the same concept in the answer panel.
 - **Multi-point annotations**: collect quotes and comments, edit or delete them directly in a basket, then drag the batch into an AI editor without sending it.
 - **Verified fallback**: if editor insertion cannot be verified, copy the payload and only finish after a matching paste action.
@@ -82,6 +84,7 @@ Click an image to open the full-size version.
 - **Excerpt saving**: select part of an answer and save only the useful excerpt.
 - **History reminders**: revisit saved explanations through subtle reminders when the term appears again.
 - **Multiple model providers**: supports common OpenAI-compatible services and local model servers.
+- **Curated themes**: five tested color presets replace arbitrary custom colors.
 - **Local-first storage**: no telemetry and no project-operated backend.
 
 ## Model Configuration
