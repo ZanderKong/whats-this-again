@@ -224,6 +224,10 @@
           background: linear-gradient(180deg, var(--iai-paper) 0%, #fbf8ef 100%);
           box-shadow: 0 2px 7px rgba(44, 36, 22, 0.1), 0 12px 34px rgba(44, 36, 22, 0.12);
         }
+        .interaction-stack .interaction-surface.collapsed {
+          width: 100% !important;
+          min-width: 0;
+        }
         .interaction-stack .answer-surface .surface-header {
           min-height: 42px;
           background: rgba(var(--iai-accent-rgb), 0.06);
