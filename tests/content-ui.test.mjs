@@ -41,6 +41,9 @@ test("round actions are icon-only and response cards expose compact controls", (
   const card = UI.responseCardMarkup({
     latest: true,
     query: "Why?",
+    collapsedLabel: "DOM child node",
+    collapsedTitle: "DOM child node",
+    collapsedAriaLabel: "Expand answers about DOM child node",
     responseHtml: "<p>Because.</p>",
     showSave: true,
     closeLabel: "Close",
@@ -48,9 +51,25 @@ test("round actions are icon-only and response cards expose compact controls", (
   });
   assert.match(card, /class="response-card latest" data-testid="answer-card"/);
   assert.match(card, /data-action="toggle-answer-collapse"/);
+  assert.match(card, /class="response-collapsed-label"[^>]+title="DOM child node"[^>]+aria-label="Expand answers about DOM child node"/);
+  assert.match(card, />DOM child node<\/button>/);
   assert.match(card, /class="response-close"[^>]+data-action="close"/);
   assert.match(card, /class="response-favourite"[^>]+data-action="save-answer"/);
   assert.match(card, /class="save-icon"/);
+});
+
+test("expanded and collapsed labels remain separate for the same response card", () => {
+  const card = UI.responseCardMarkup({
+    latest: true,
+    query: "解释选中文字",
+    collapsedLabel: "DOM 子节点",
+    collapsedTitle: "DOM 子节点的完整原文",
+    collapsedAriaLabel: "展开关于 DOM 子节点的回答",
+    closeLabel: "关闭"
+  });
+  assert.match(card, /class="response-question"[^>]*>解释选中文字<\/button>/);
+  assert.match(card, /class="response-collapsed-label"[^>]*>DOM 子节点<\/button>/);
+  assert.match(card, /title="DOM 子节点的完整原文"/);
 });
 
 test("saved response cards make the star active without offering an unsave action", () => {

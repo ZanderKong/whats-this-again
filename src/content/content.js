@@ -365,7 +365,8 @@
           to { opacity: 1; transform: translateY(0); }
         }
         .response-meta { display: block; margin-bottom: 10px; color: var(--iai-accent-strong); }
-        .response-question {
+        .response-question,
+        .response-collapsed-label {
           display: block;
           width: 100%;
           min-width: 0;
@@ -380,9 +381,13 @@
           text-overflow: ellipsis;
           white-space: nowrap;
         }
-        .response-card.latest .response-question { cursor: grab; }
-        .response-card.latest .response-question:active { cursor: grabbing; }
-        .response-question:focus-visible { outline: 2px solid var(--iai-accent-soft); outline-offset: 3px; border-radius: 6px; }
+        .response-collapsed-label { display: none; }
+        .response-card.latest .response-question,
+        .response-card.latest .response-collapsed-label { cursor: grab; }
+        .response-card.latest .response-question:active,
+        .response-card.latest .response-collapsed-label:active { cursor: grabbing; }
+        .response-question:focus-visible,
+        .response-collapsed-label:focus-visible { outline: 2px solid var(--iai-accent-soft); outline-offset: 3px; border-radius: 6px; }
         .response-close,
         .response-favourite {
           position: absolute;
@@ -423,10 +428,36 @@
         }
         @keyframes response-caret { 50% { opacity: 0; } }
         .interaction-stack.answer-collapsed > :not(#answer-surface) { display: none !important; }
-        .interaction-stack.answer-collapsed .answer-surface { margin-top: 0; overflow: visible; }
+        .interaction-stack.answer-collapsed .answer-surface {
+          width: fit-content;
+          min-width: 160px;
+          max-width: min(420px, calc(100vw - 24px));
+          min-height: 0 !important;
+          height: auto !important;
+          max-height: none !important;
+          margin-top: 0;
+          padding: 0;
+          overflow: visible;
+          align-items: start;
+          justify-items: start;
+        }
         .interaction-stack.answer-collapsed .response-card:not(.latest) { display: none; }
-        .interaction-stack.answer-collapsed .response-card.latest { min-height: 44px; border-radius: 999px; padding: 9px 42px 9px 16px; }
+        .interaction-stack.answer-collapsed .response-card.latest {
+          width: fit-content;
+          max-width: 100%;
+          min-height: 44px;
+          height: 44px;
+          border-radius: 999px;
+          padding: 9px 42px 9px 16px;
+          align-self: start;
+        }
         .interaction-stack.answer-collapsed .response-card.latest .response-meta { margin: 0; }
+        .interaction-stack.answer-collapsed .response-card.latest .response-question { display: none; }
+        .interaction-stack.answer-collapsed .response-card.latest .response-collapsed-label {
+          display: block;
+          width: 100%;
+          max-width: 100%;
+        }
         .interaction-stack.answer-collapsed .response-card.latest .response-body,
         .interaction-stack.answer-collapsed .response-card.latest .response-favourite,
         .interaction-stack.answer-collapsed .resize-handle { display: none; }
@@ -1205,8 +1236,8 @@
       return;
     }
 
-    const header = event.target?.closest?.(".surface-header, .response-card.latest .response-question");
-    if (!header || (event.target?.closest?.("button,select") && !event.target?.closest?.(".response-question"))) {
+    const header = event.target?.closest?.(".surface-header, .response-card.latest [data-action=toggle-answer-collapse]");
+    if (!header || (event.target?.closest?.("button,select") && !event.target?.closest?.("[data-action=toggle-answer-collapse]"))) {
       return;
     }
 
@@ -1755,6 +1786,8 @@
   }
 
   function renderResponseMessages(messages) {
+    const collapsedTitle = normalizeVisibleText(panelState?.term || messages[0]?.query || "");
+    const collapsedLabel = truncateTitle(collapsedTitle, 48);
     return messages.map((item, index) => {
       const latest = index === 0;
       const showSave = latest && !item.loading;
@@ -1765,6 +1798,9 @@
         responseId: item.loading ? "inlineai-response" : "",
         loading: item.loading,
         latest,
+        collapsedLabel,
+        collapsedTitle,
+        collapsedAriaLabel: t("content.expandThreadAbout", { term: collapsedTitle }, currentLanguage()),
         showSave,
         saved: item.saved,
         saveAction: "save-answer",

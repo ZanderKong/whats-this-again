@@ -44,12 +44,16 @@
     const question = options.latest
       ? `<button class="response-question" type="button" data-action="toggle-answer-collapse" title="${escapeHtml(options.query)}">${escapeHtml(options.query)}</button>`
       : `<div class="response-question" title="${escapeHtml(options.query)}">${escapeHtml(options.query)}</div>`;
+    const collapsedThreadLabel = options.latest
+      ? `<button class="response-collapsed-label" type="button" data-action="toggle-answer-collapse" title="${escapeHtml(options.collapsedTitle || options.collapsedLabel || options.query)}" aria-label="${escapeHtml(options.collapsedAriaLabel || options.collapsedTitle || options.collapsedLabel || options.query)}">${escapeHtml(options.collapsedLabel || options.query)}</button>`
+      : "";
     const saveButton = options.showSave
       ? `<button id="${escapeHtml(options.saveId || "inlineai-save-button")}" class="response-favourite${saved}" type="button" ${options.saved ? `aria-disabled="true" aria-pressed="true"` : `data-action="${escapeHtml(options.saveAction || "save-answer")}" aria-pressed="false"`} title="${escapeHtml(options.saveLabel)}" aria-label="${escapeHtml(options.saveLabel)}">${saveIcon()}</button>`
       : "";
     return `<article class="response-card${latest}" data-testid="answer-card">
       <div class="response-meta">
         ${question}
+        ${collapsedThreadLabel}
         <button class="response-close" type="button" data-action="close" title="${escapeHtml(options.closeLabel)}" aria-label="${escapeHtml(options.closeLabel)}">×</button>
       </div>
       <div class="response-body"><div${responseId} class="response${options.loading ? " streaming" : ""}">${options.responseHtml || ""}</div></div>

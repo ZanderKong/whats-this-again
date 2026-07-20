@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.2
+
+- Fixed answer collapse so the compact 44px capsule identifies the selected source text for the whole thread, while the expanded card keeps its original default, custom-question, or follow-up title.
+- Fixed the intermittent oversized white circle after resizing: the collapsed response stack now ignores the expanded inline height, uses content-fit sizing, and restores the previous height on expansion.
+- Added accessible collapsed-thread labels and regression coverage for default prompts, long source text, drag/click handling, and resized answer surfaces.
+
 ## 0.5.1
 
 - Replaced the 0.5.0 interaction visual layer with the approved dark-pill prototype treatment: a 44px pill composer, separate icon-only annotation/send actions, a quote chip, and 26px response cards.
