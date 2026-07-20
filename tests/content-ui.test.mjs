@@ -17,7 +17,10 @@ test("interaction shell groups quote, 44px input row, and answer stack", () => {
   assert.match(html, /id="composer-surface" class="input-shell"/);
   assert.match(html, /id="annotation-action-surface" class="round-action annotate hidden"/);
   assert.match(html, /id="send-action-surface" class="round-action send"/);
+  assert.match(html, /id="thread-header" class="thread-header hidden"/);
+  assert.match(html, /id="quote-chip" class="quote-chip" type="button" data-action="toggle-answer-collapse"/);
   assert.match(html, /data-testid="quote-chip"/);
+  assert.match(html, /data-testid="collapsed-thread-close"/);
   assert.match(html, /data-testid="answer-surface"/);
   assert.match(html, /data-testid="composer-surface"/);
 });
@@ -33,7 +36,7 @@ test("composer markup contains only the text input", () => {
   assert.doesNotMatch(html, /composer-close|annotation-action|send-action/);
 });
 
-test("round actions are icon-only and response cards expose compact controls", () => {
+test("round actions are icon-only and response cards keep question text non-interactive", () => {
   const shell = UI.interactionShell("Dialog");
   assert.match(shell, /<svg[^>]+aria-hidden="true"/);
   assert.doesNotMatch(shell, /<span>.*(?:批注|发送).*<\/span>/);
@@ -41,35 +44,17 @@ test("round actions are icon-only and response cards expose compact controls", (
   const card = UI.responseCardMarkup({
     latest: true,
     query: "Why?",
-    collapsedLabel: "DOM child node",
-    collapsedTitle: "DOM child node",
-    collapsedAriaLabel: "Expand answers about DOM child node",
     responseHtml: "<p>Because.</p>",
     showSave: true,
     closeLabel: "Close",
     saveLabel: "Save"
   });
   assert.match(card, /class="response-card latest" data-testid="answer-card"/);
-  assert.match(card, /data-action="toggle-answer-collapse"/);
-  assert.match(card, /class="response-collapsed-label"[^>]+title="DOM child node"[^>]+aria-label="Expand answers about DOM child node"/);
-  assert.match(card, />DOM child node<\/button>/);
+  assert.match(card, /class="response-question" title="Why\?">Why\?<\/div>/);
+  assert.doesNotMatch(card, /toggle-answer-collapse|response-collapsed-label/);
   assert.match(card, /class="response-close"[^>]+data-action="close"/);
   assert.match(card, /class="response-favourite"[^>]+data-action="save-answer"/);
   assert.match(card, /class="save-icon"/);
-});
-
-test("expanded and collapsed labels remain separate for the same response card", () => {
-  const card = UI.responseCardMarkup({
-    latest: true,
-    query: "解释选中文字",
-    collapsedLabel: "DOM 子节点",
-    collapsedTitle: "DOM 子节点的完整原文",
-    collapsedAriaLabel: "展开关于 DOM 子节点的回答",
-    closeLabel: "关闭"
-  });
-  assert.match(card, /class="response-question"[^>]*>解释选中文字<\/button>/);
-  assert.match(card, /class="response-collapsed-label"[^>]*>DOM 子节点<\/button>/);
-  assert.match(card, /title="DOM 子节点的完整原文"/);
 });
 
 test("saved response cards make the star active without offering an unsave action", () => {

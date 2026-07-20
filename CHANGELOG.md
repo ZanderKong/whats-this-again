@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.3
+
+- Made the selected-text capsule the single collapse, expand, and drag handle for an answer thread; questions are now display-only, regardless of how many follow-ups exist.
+- Replaced the duplicate collapsed answer card with the existing source capsule plus a close icon, including arrow affordance, keyboard state, translated labels, loading protection, and drag-click suppression.
+- Removed the now-obsolete `response-collapsed-label` visual layer, which also eliminates collapsed response-surface sizing from the interaction path.
+
 ## 0.5.2
 
 - Fixed answer collapse so the compact 44px capsule identifies the selected source text for the whole thread, while the expanded card keeps its original default, custom-question, or follow-up title.

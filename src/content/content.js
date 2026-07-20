@@ -45,7 +45,9 @@
   let interactionStack = null;
   let answerSurface = null;
   let composerSurface = null;
+  let threadHeader = null;
   let quoteChip = null;
+  let collapsedThreadClose = null;
   let inputRow = null;
   let annotationActionSurface = null;
   let sendActionSurface = null;
@@ -225,13 +227,19 @@
           pointer-events: none;
         }
         .interaction-stack > * { pointer-events: auto; }
+        .thread-header {
+          display: inline-flex;
+          align-items: center;
+          justify-self: start;
+          gap: 6px;
+          max-width: 100%;
+          margin: 0 0 10px;
+        }
         .quote-chip {
           display: inline-flex;
           align-items: center;
           gap: 8px;
-          justify-self: start;
           max-width: 100%;
-          margin: 0 0 10px;
           border: 1px solid rgba(var(--iai-accent-rgb), 0.18);
           border-radius: 999px;
           padding: 6px 10px;
@@ -242,7 +250,10 @@
           font: 600 12px/1.2 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
           text-overflow: ellipsis;
           white-space: nowrap;
+          cursor: grab;
+          transition: background 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
         }
+        .quote-chip-label { overflow: hidden; text-overflow: ellipsis; }
         .quote-chip::before {
           content: "";
           width: 6px;
@@ -251,6 +262,42 @@
           border-radius: 50%;
           background: var(--iai-accent);
         }
+        .quote-chip-toggle-icon {
+          width: 14px;
+          height: 14px;
+          flex: 0 0 auto;
+          fill: none;
+          stroke: currentColor;
+          stroke-width: 1.8;
+          stroke-linecap: round;
+          stroke-linejoin: round;
+          transition: transform 140ms ease;
+        }
+        .quote-chip:hover:not(:disabled),
+        .quote-chip:focus-visible:not(:disabled) {
+          outline: none;
+          border-color: var(--iai-accent-border, rgba(var(--iai-accent-rgb), 0.34));
+          background: var(--iai-accent-soft);
+          box-shadow: 0 0 0 3px var(--iai-accent-soft), 0 5px 14px rgba(43, 35, 29, 0.05);
+        }
+        .quote-chip:active:not(:disabled) { cursor: grabbing; }
+        .quote-chip:disabled { cursor: default; }
+        .quote-chip:disabled .quote-chip-toggle-icon { display: none; }
+        .collapsed-thread-close {
+          display: inline-flex;
+          width: 28px;
+          height: 28px;
+          align-items: center;
+          justify-content: center;
+          border: 0;
+          padding: 0;
+          color: var(--iai-interaction-muted);
+          background: transparent;
+          cursor: pointer;
+          font: 20px/1 ui-sans-serif, system-ui, sans-serif;
+        }
+        .collapsed-thread-close:hover,
+        .collapsed-thread-close:focus-visible { outline: none; color: var(--iai-accent-strong); }
         .input-row {
           display: grid;
           grid-template-columns: minmax(0, 1fr) 44px 44px;
@@ -365,8 +412,7 @@
           to { opacity: 1; transform: translateY(0); }
         }
         .response-meta { display: block; margin-bottom: 10px; color: var(--iai-accent-strong); }
-        .response-question,
-        .response-collapsed-label {
+        .response-question {
           display: block;
           width: 100%;
           min-width: 0;
@@ -381,13 +427,6 @@
           text-overflow: ellipsis;
           white-space: nowrap;
         }
-        .response-collapsed-label { display: none; }
-        .response-card.latest .response-question,
-        .response-card.latest .response-collapsed-label { cursor: grab; }
-        .response-card.latest .response-question:active,
-        .response-card.latest .response-collapsed-label:active { cursor: grabbing; }
-        .response-question:focus-visible,
-        .response-collapsed-label:focus-visible { outline: 2px solid var(--iai-accent-soft); outline-offset: 3px; border-radius: 6px; }
         .response-close,
         .response-favourite {
           position: absolute;
@@ -427,40 +466,9 @@
           animation: response-caret 800ms steps(1, end) infinite;
         }
         @keyframes response-caret { 50% { opacity: 0; } }
-        .interaction-stack.answer-collapsed > :not(#answer-surface) { display: none !important; }
-        .interaction-stack.answer-collapsed .answer-surface {
-          width: fit-content;
-          min-width: 160px;
-          max-width: min(420px, calc(100vw - 24px));
-          min-height: 0 !important;
-          height: auto !important;
-          max-height: none !important;
-          margin-top: 0;
-          padding: 0;
-          overflow: visible;
-          align-items: start;
-          justify-items: start;
-        }
-        .interaction-stack.answer-collapsed .response-card:not(.latest) { display: none; }
-        .interaction-stack.answer-collapsed .response-card.latest {
-          width: fit-content;
-          max-width: 100%;
-          min-height: 44px;
-          height: 44px;
-          border-radius: 999px;
-          padding: 9px 42px 9px 16px;
-          align-self: start;
-        }
-        .interaction-stack.answer-collapsed .response-card.latest .response-meta { margin: 0; }
-        .interaction-stack.answer-collapsed .response-card.latest .response-question { display: none; }
-        .interaction-stack.answer-collapsed .response-card.latest .response-collapsed-label {
-          display: block;
-          width: 100%;
-          max-width: 100%;
-        }
-        .interaction-stack.answer-collapsed .response-card.latest .response-body,
-        .interaction-stack.answer-collapsed .response-card.latest .response-favourite,
-        .interaction-stack.answer-collapsed .resize-handle { display: none; }
+        .interaction-stack.answer-collapsed > :not(#thread-header) { display: none !important; }
+        .interaction-stack.answer-collapsed .thread-header { margin-bottom: 0; }
+        .interaction-stack.answer-collapsed .quote-chip-toggle-icon { transform: rotate(180deg); }
         .pinned-response-card { position: fixed; z-index: 4; max-height: calc(100vh - 24px); overflow: auto; pointer-events: auto; }
         .surface.collapsed {
           width: auto !important;
@@ -912,7 +920,9 @@
     interactionStack = shadow.getElementById("interaction-stack");
     answerSurface = shadow.getElementById("answer-surface");
     composerSurface = shadow.getElementById("composer-surface");
+    threadHeader = shadow.getElementById("thread-header");
     quoteChip = shadow.getElementById("quote-chip");
+    collapsedThreadClose = shadow.getElementById("collapsed-thread-close");
     inputRow = shadow.getElementById("input-row");
     annotationActionSurface = shadow.getElementById("annotation-action-surface");
     sendActionSurface = shadow.getElementById("send-action-surface");
@@ -1236,8 +1246,8 @@
       return;
     }
 
-    const header = event.target?.closest?.(".surface-header, .response-card.latest [data-action=toggle-answer-collapse]");
-    if (!header || (event.target?.closest?.("button,select") && !event.target?.closest?.("[data-action=toggle-answer-collapse]"))) {
+    const header = event.target?.closest?.(".surface-header, #quote-chip");
+    if (!header || (event.target?.closest?.("button,select") && !event.target?.closest?.("#quote-chip"))) {
       return;
     }
 
@@ -1674,11 +1684,12 @@
     panel?.classList.add("hidden");
     interactionStack?.classList.remove("hidden");
     interactionStack?.classList.toggle("answer-collapsed", Boolean(panelState?.collapsed));
-    updateQuoteChip();
-    quoteChip?.classList.toggle("hidden", !(visible.answer || visible.composer));
+    threadHeader?.classList.toggle("hidden", !(visible.answer || visible.composer));
+    collapsedThreadClose?.classList.toggle("hidden", !panelState?.collapsed);
     inputRow?.classList.toggle("hidden", !visible.composer);
     composerSurface?.classList.remove("hidden");
     answerSurface?.classList.toggle("hidden", !visible.answer);
+    updateQuoteChip();
     if (!visible.composer) {
       annotationActionSurface?.classList.add("hidden");
       sendActionSurface?.classList.add("hidden");
@@ -1715,10 +1726,25 @@
       return;
     }
     const quote = normalizeVisibleText(panelState?.term || selectionState?.term || "");
+    const canToggle = Boolean(panelState && answerSurface && !answerSurface.classList.contains("hidden"));
+    const isCollapsed = Boolean(panelState?.collapsed);
     const label = `${t("content.selectedText", currentLanguage())}: ${quote}`;
-    quoteChip.textContent = truncateTitle(quote, 72);
-    quoteChip.title = label;
-    quoteChip.setAttribute("aria-label", label);
+    const actionLabel = canToggle
+      ? t(isCollapsed ? "content.expandThreadAbout" : "content.collapseThreadAbout", { term: quote }, currentLanguage())
+      : label;
+    const labelNode = quoteChip.querySelector(".quote-chip-label");
+    if (labelNode) {
+      labelNode.textContent = truncateTitle(quote, 72);
+    }
+    quoteChip.title = actionLabel;
+    quoteChip.setAttribute("aria-label", actionLabel);
+    quoteChip.setAttribute("aria-expanded", String(canToggle && !isCollapsed));
+    quoteChip.disabled = !canToggle;
+    if (collapsedThreadClose) {
+      const closeLabel = t("content.close", currentLanguage());
+      collapsedThreadClose.title = closeLabel;
+      collapsedThreadClose.setAttribute("aria-label", closeLabel);
+    }
   }
 
   function surfaceShell(term, _eyebrow, body, options = {}) {
@@ -1786,8 +1812,6 @@
   }
 
   function renderResponseMessages(messages) {
-    const collapsedTitle = normalizeVisibleText(panelState?.term || messages[0]?.query || "");
-    const collapsedLabel = truncateTitle(collapsedTitle, 48);
     return messages.map((item, index) => {
       const latest = index === 0;
       const showSave = latest && !item.loading;
@@ -1798,9 +1822,6 @@
         responseId: item.loading ? "inlineai-response" : "",
         loading: item.loading,
         latest,
-        collapsedLabel,
-        collapsedTitle,
-        collapsedAriaLabel: t("content.expandThreadAbout", { term: collapsedTitle }, currentLanguage()),
         showSave,
         saved: item.saved,
         saveAction: "save-answer",
@@ -2051,6 +2072,8 @@
     }
     panelState.collapsed = !panelState.collapsed;
     interactionStack.classList.toggle("answer-collapsed", panelState.collapsed);
+    collapsedThreadClose?.classList.toggle("hidden", !panelState.collapsed);
+    updateQuoteChip();
     keepInteractionInViewport();
   }
 
@@ -2403,7 +2426,7 @@
     panel?.classList.remove("collapsed");
     interactionStack?.classList.add("hidden");
     interactionStack?.classList.remove("answer-collapsed");
-    quoteChip?.classList.add("hidden");
+    threadHeader?.classList.add("hidden");
     inputRow?.classList.add("hidden");
     inputRow?.classList.remove("send-only");
     answerSurface?.classList.add("hidden");

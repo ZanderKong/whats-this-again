@@ -11,18 +11,18 @@ test("content UI keeps the dark-pill interaction contract and removes the 0.5.0 
   assert.match(content, /\.round-action \{[^}]*width: 44px;[^}]*height: 44px;[^}]*border-radius: 999px/s);
   assert.match(content, /--card-radius: 26px/);
   assert.match(content, /interaction-stack\.answer-collapsed/);
-  assert.match(content, /answer-collapsed \.answer-surface \{[^}]*width: fit-content;[^}]*height: auto !important;[^}]*max-height: none !important;/s);
-  assert.match(content, /answer-collapsed \.response-card\.latest \{[^}]*min-height: 44px;[^}]*height: 44px;/s);
-  assert.match(content, /answer-collapsed \.response-card\.latest \.response-question \{ display: none; \}/);
-  assert.match(content, /answer-collapsed \.response-card\.latest \.response-collapsed-label \{[\s\S]*display: block;/);
+  assert.match(content, /answer-collapsed > :not\(#thread-header\) \{ display: none !important; \}/);
+  assert.match(content, /answer-collapsed \.quote-chip-toggle-icon \{ transform: rotate\(180deg\); \}/);
+  assert.match(content, /#quote-chip/);
   assert.match(content, /response-card \.response\.streaming::after/);
-  assert.doesNotMatch(content, /annotation-standalone|send-standalone|composer-close|--iai-note-/);
+  assert.doesNotMatch(content, /annotation-standalone|send-standalone|composer-close|--iai-note-|response-collapsed-label/);
   assert.match(ui, /data-testid="answer-surface"/);
   assert.match(ui, /data-testid="composer-surface"/);
   assert.match(ui, /data-testid="annotation-action"/);
   assert.match(ui, /data-testid="send-action"/);
   assert.match(ui, /data-testid="answer-card"/);
-  assert.match(ui, /class="response-collapsed-label"/);
+  assert.match(ui, /id="quote-chip" class="quote-chip" type="button" data-action="toggle-answer-collapse"/);
+  assert.doesNotMatch(ui, /response-collapsed-label/);
 });
 
 test("settings removes arbitrary color input but keeps preset controls", () => {
