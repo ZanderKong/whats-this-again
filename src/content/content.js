@@ -45,6 +45,8 @@
   let interactionStack = null;
   let answerSurface = null;
   let composerSurface = null;
+  let quoteChip = null;
+  let inputRow = null;
   let annotationActionSurface = null;
   let sendActionSurface = null;
   let composerError = null;
@@ -62,6 +64,7 @@
   let dragState = null;
   let resizeState = null;
   let suppressPanelHeaderClick = false;
+  let suppressOutsideCloseUntil = 0;
   let pinnedPanelCounter = 0;
   let annotationBatches = {};
   let activeAnnotationBatches = {};
@@ -131,11 +134,11 @@
           --iai-line: rgba(31, 41, 55, 0.12);
           --iai-paper: #ffffff;
           --iai-wash: #f6f8fb;
-          --iai-note-ink: #2c2416;
-          --iai-note-muted: #756e61;
-          --iai-note-paper: #fdfaf0;
-          --iai-note-paper-soft: #f7f2e4;
-          --iai-note-line: rgba(44, 36, 22, 0.2);
+          --iai-interaction-ink: #28231f;
+          --iai-interaction-muted: #7a736c;
+          --iai-interaction-line: rgba(48, 42, 37, 0.12);
+          --iai-interaction-paper: rgba(255, 255, 255, 0.985);
+          --iai-interaction-shadow: 0 18px 48px rgba(43, 35, 29, 0.13), 0 3px 12px rgba(43, 35, 29, 0.07);
           --iai-accent: #2563eb;
           --iai-accent-strong: #1d4ed8;
           --iai-accent-rgb: 37, 99, 235;
@@ -215,156 +218,219 @@
         .interaction-stack {
           position: fixed;
           display: grid;
-          grid-template-columns: minmax(0, 1fr) auto auto;
-          gap: 8px;
-          width: min(540px, calc(100vw - 24px));
-          min-width: min(300px, calc(100vw - 24px));
+          width: min(560px, calc(100vw - 24px));
+          min-width: min(320px, calc(100vw - 24px));
           max-height: calc(100vh - 24px);
+          color: var(--iai-interaction-ink);
           pointer-events: none;
-          --iai-ink: var(--iai-note-ink);
-          --iai-muted: var(--iai-note-muted);
-          --iai-line: var(--iai-note-line);
         }
         .interaction-stack > * { pointer-events: auto; }
-        .interaction-stack .interaction-surface {
-          grid-column: 1 / -1;
-          position: relative;
-          inset: auto;
+        .quote-chip {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          justify-self: start;
+          max-width: 100%;
+          margin: 0 0 10px;
+          border: 1px solid rgba(var(--iai-accent-rgb), 0.18);
+          border-radius: 999px;
+          padding: 6px 10px;
+          overflow: hidden;
+          color: var(--iai-interaction-muted);
+          background: rgba(255, 255, 255, 0.9);
+          box-shadow: 0 5px 14px rgba(43, 35, 29, 0.05);
+          font: 600 12px/1.2 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .quote-chip::before {
+          content: "";
+          width: 6px;
+          height: 6px;
+          flex: 0 0 auto;
+          border-radius: 50%;
+          background: var(--iai-accent);
+        }
+        .input-row {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) 44px 44px;
+          gap: 8px;
+          align-items: start;
+        }
+        .input-row.send-only { grid-template-columns: minmax(0, 1fr) 44px; }
+        .input-shell {
           width: 100%;
-          min-width: 0;
-          max-height: min(610px, calc(100vh - 112px));
-          border-radius: 5px;
-          background: linear-gradient(180deg, var(--iai-note-paper) 0%, var(--iai-note-paper-soft) 100%);
-          box-shadow: 0 2px 7px rgba(44, 36, 22, 0.1), 0 12px 34px rgba(44, 36, 22, 0.12);
+          min-height: 44px;
+          border: 1px solid rgba(48, 42, 37, 0.13);
+          border-radius: 999px;
+          padding: 6px 14px;
+          background: var(--iai-interaction-paper);
+          box-shadow: var(--iai-interaction-shadow);
+          transition: border-color 140ms ease, box-shadow 140ms ease;
         }
-        .interaction-stack .interaction-surface.collapsed {
-          width: 100% !important;
-          min-width: 0;
+        .input-shell:focus-within {
+          border-color: var(--iai-accent-border, rgba(var(--iai-accent-rgb), 0.34));
+          box-shadow: 0 0 0 3px var(--iai-accent-soft), var(--iai-interaction-shadow);
         }
-        .interaction-stack .answer-surface .surface-header {
-          min-height: 42px;
-          background: var(--iai-note-paper-soft);
-        }
-        .interaction-stack .answer-surface .term-title {
-          color: var(--iai-accent-strong);
-          font-family: ui-serif, "Songti SC", "Noto Serif CJK SC", STSong, Georgia, serif;
-          font-size: 15px;
-          font-weight: 700;
-        }
-        .interaction-stack .answer-surface .surface-body {
-          max-height: calc(min(610px, 100vh - 112px) - 44px);
-          font-family: ui-serif, "Songti SC", "Noto Serif CJK SC", STSong, Georgia, serif;
-        }
-        .composer-surface {
-          position: relative;
-          grid-column: 1;
+        .input-shell textarea {
           width: 100%;
-          min-height: 34px;
-          border: 1px solid var(--iai-note-line);
-          border-radius: 4px;
-          padding: 0 10px;
-          background: var(--iai-note-paper);
-          box-shadow: 0 1px 3px rgba(44, 36, 22, 0.07), 0 4px 14px rgba(44, 36, 22, 0.07);
-        }
-        .composer-surface textarea {
-          min-height: 34px;
-          max-height: 80px;
+          min-height: 30px;
+          height: 30px;
+          max-height: 96px;
           border: 0;
-          padding: 7px 0;
+          outline: 0;
+          padding: 5px 0 3px;
+          resize: none;
+          overflow: auto;
           background: transparent;
           box-shadow: none;
-          color: var(--iai-ink);
-          font: 14px/1.5 ui-serif, "Songti SC", "Noto Serif CJK SC", STSong, Georgia, serif;
+          color: var(--iai-interaction-ink);
+          font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
         }
-        .composer-surface textarea:focus { outline: none; }
-        .composer-surface:focus-within {
-          border-color: var(--iai-accent);
-          box-shadow: 0 0 0 3px var(--iai-accent-soft), 0 4px 14px rgba(44, 36, 22, 0.08);
-        }
-        .interaction-stack.followup-mode .composer-surface { grid-column: 1 / 3; }
-        .standalone-action,
-        .composer-close {
-          border: 1px solid rgba(44, 36, 22, 0.22);
-          border-radius: 4px;
-          background: var(--iai-note-paper);
-          color: var(--iai-ink);
-          cursor: pointer;
-          font: 650 12px/1 ui-sans-serif, system-ui, sans-serif;
-          transition: background 140ms ease, border-color 140ms ease, color 140ms ease, transform 120ms ease, box-shadow 140ms ease;
-        }
-        .standalone-action {
-          align-self: end;
-          min-height: 34px;
-          align-items: center;
-        }
-        .annotation-standalone {
-          grid-column: 2;
-          display: inline-flex;
-          gap: 5px;
-          padding: 0 11px;
-        }
-        .send-standalone {
-          grid-column: 3;
+        .input-shell textarea::placeholder { color: #aaa49d; }
+        .round-action {
           display: grid;
-          width: 34px;
-          height: 34px;
+          width: 44px;
+          height: 44px;
+          min-height: 44px;
           place-items: center;
-          border-color: var(--iai-accent);
-          border-radius: 50%;
+          border: 1px solid var(--iai-interaction-line);
+          border-radius: 999px;
           padding: 0;
+          cursor: pointer;
+          box-shadow: 0 7px 18px rgba(43, 35, 29, 0.09);
+          transition: transform 120ms ease, background 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+        }
+        .round-action.annotate {
           color: var(--iai-accent-strong);
+          border-color: var(--iai-accent-border, rgba(var(--iai-accent-rgb), 0.26));
+          background: var(--iai-interaction-paper);
         }
-        .composer-close {
-          position: absolute;
-          top: -9px;
-          right: -9px;
-          z-index: 1;
-          display: grid;
-          width: 24px;
-          height: 24px;
-          place-items: center;
-          border-color: var(--iai-line);
-          border-radius: 50%;
-          background: var(--iai-note-paper);
-          color: var(--iai-muted);
-          font-size: 17px;
-        }
-        .annotation-standalone:hover,
-        .annotation-standalone:focus-visible {
-          outline: none;
-          border-color: rgba(44, 36, 22, 0.48);
-          background: var(--iai-note-paper-soft);
-          transform: translateY(-1px);
-        }
-        .send-standalone:hover,
-        .send-standalone:focus-visible {
-          outline: none;
-          border-color: var(--iai-accent-strong);
-          background: var(--iai-accent-strong);
+        .round-action.send {
           color: var(--iai-accent-foreground, #fff);
-          box-shadow: 0 6px 16px var(--iai-accent-shadow, rgba(var(--iai-accent-rgb), 0.22));
-          transform: translateY(-1px);
+          border-color: var(--iai-accent-border, rgba(var(--iai-accent-rgb), 0.62));
+          background: var(--iai-accent);
         }
-        .composer-close:hover,
-        .composer-close:focus-visible {
-          outline: none;
-          color: var(--iai-warn);
-          box-shadow: 0 4px 12px rgba(44, 36, 22, 0.14);
-        }
-        .standalone-action:active { transform: scale(0.96); }
-        .standalone-action:disabled,
-        .composer-surface textarea:disabled { cursor: default; opacity: 0.48; }
-        .composer-error { grid-column: 1 / -1; margin: 0; }
-        .interaction-stack.answer-collapsed > :not(#answer-surface) { display: none !important; }
+        .round-action:hover,
+        .round-action:focus-visible { outline: none; transform: translateY(-1px); }
+        .round-action:focus-visible { box-shadow: 0 0 0 3px var(--iai-accent-soft), 0 7px 18px rgba(43, 35, 29, 0.09); }
+        .round-action.annotate:hover { background: var(--iai-accent-soft); }
+        .round-action.send:hover { background: var(--iai-accent-strong); }
+        .round-action:active { transform: scale(0.97); }
+        .round-action:disabled,
+        .input-shell textarea:disabled { cursor: default; opacity: 0.45; }
         .action-icon {
-          width: 16px;
-          height: 16px;
+          width: 18px;
+          height: 18px;
           fill: none;
           stroke: currentColor;
-          stroke-width: 1.6;
+          stroke-width: 1.8;
           stroke-linecap: round;
           stroke-linejoin: round;
         }
+        .interaction-hint {
+          min-height: 22px;
+          margin: 0;
+          padding: 8px 2px 0;
+          color: var(--iai-interaction-muted);
+          font: 600 12px/1.4 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+        }
+        .interaction-hint.error { color: var(--iai-warn); }
+        .response-stack {
+          position: relative;
+          display: grid;
+          gap: 10px;
+          width: 100%;
+          max-height: min(520px, calc(100vh - 108px));
+          margin-top: 12px;
+          padding: 1px;
+          overflow: auto;
+        }
+        .response-card {
+          --card-radius: 26px;
+          --corner-icon-size: 16px;
+          --corner-control-inset: calc(var(--card-radius) - (var(--corner-icon-size) / 2));
+          position: relative;
+          display: block;
+          min-width: 0;
+          border: 1px solid rgba(48, 42, 37, 0.09);
+          border-radius: var(--card-radius);
+          padding: 18px 34px 22px 20px;
+          background: var(--iai-interaction-paper);
+          box-shadow: 0 12px 30px rgba(43, 35, 29, 0.075);
+          animation: response-card-in 180ms ease-out;
+        }
+        @keyframes response-card-in {
+          from { opacity: 0; transform: translateY(6px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .response-meta { display: block; margin-bottom: 10px; color: var(--iai-accent-strong); }
+        .response-question {
+          display: block;
+          width: 100%;
+          min-width: 0;
+          overflow: hidden;
+          border: 0;
+          padding: 0 18px 0 0;
+          color: var(--iai-accent-strong);
+          background: transparent;
+          cursor: default;
+          font: 650 14px/1.72 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+          text-align: left;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .response-card.latest .response-question { cursor: grab; }
+        .response-card.latest .response-question:active { cursor: grabbing; }
+        .response-question:focus-visible { outline: 2px solid var(--iai-accent-soft); outline-offset: 3px; border-radius: 6px; }
+        .response-close,
+        .response-favourite {
+          position: absolute;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: var(--corner-icon-size);
+          height: var(--corner-icon-size);
+          margin: 0;
+          border: 0;
+          padding: 0;
+          color: var(--iai-interaction-muted);
+          background: transparent;
+          box-shadow: none;
+          cursor: pointer;
+          transition: color 120ms ease, transform 120ms ease;
+        }
+        .response-close { top: var(--corner-control-inset); right: var(--corner-control-inset); font-size: 18px; line-height: 1; }
+        .response-favourite { right: var(--corner-control-inset); bottom: var(--corner-control-inset); }
+        .response-close:hover,
+        .response-close:focus-visible,
+        .response-favourite:hover,
+        .response-favourite:focus-visible { outline: none; color: var(--iai-accent-strong); transform: scale(1.08); }
+        .response-favourite.active { color: var(--iai-accent); cursor: default; }
+        .save-icon { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; }
+        .response-body { min-height: 28px; color: var(--iai-interaction-ink); font: 14px/1.68 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; }
+        .response-card .response { border: 0; padding: 0; background: transparent; color: inherit; font: inherit; }
+        .response-card .response pre { max-width: 100%; }
+        .response-card .response.streaming::after {
+          content: "";
+          display: inline-block;
+          width: 2px;
+          height: 1em;
+          margin-left: 3px;
+          vertical-align: -0.12em;
+          background: var(--iai-accent);
+          animation: response-caret 800ms steps(1, end) infinite;
+        }
+        @keyframes response-caret { 50% { opacity: 0; } }
+        .interaction-stack.answer-collapsed > :not(#answer-surface) { display: none !important; }
+        .interaction-stack.answer-collapsed .answer-surface { margin-top: 0; overflow: visible; }
+        .interaction-stack.answer-collapsed .response-card:not(.latest) { display: none; }
+        .interaction-stack.answer-collapsed .response-card.latest { min-height: 44px; border-radius: 999px; padding: 9px 42px 9px 16px; }
+        .interaction-stack.answer-collapsed .response-card.latest .response-meta { margin: 0; }
+        .interaction-stack.answer-collapsed .response-card.latest .response-body,
+        .interaction-stack.answer-collapsed .response-card.latest .response-favourite,
+        .interaction-stack.answer-collapsed .resize-handle { display: none; }
+        .pinned-response-card { position: fixed; z-index: 4; max-height: calc(100vh - 24px); overflow: auto; pointer-events: auto; }
         .surface.collapsed {
           width: auto !important;
           min-width: 150px;
@@ -468,25 +534,6 @@
           min-height: 34px;
           padding: 0 8px;
         }
-        .prompt-composer {
-          display: grid;
-          grid-template-columns: minmax(0, 1fr) 36px;
-          gap: 10px;
-          align-items: center;
-          border: 1px solid rgba(31, 41, 55, 0.14);
-          border-radius: 8px;
-          min-height: 50px;
-          padding: 6px 8px 6px 14px;
-          background: var(--iai-paper);
-          box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04);
-        }
-        .prompt-composer:focus-within {
-          border-color: rgba(var(--iai-accent-rgb), 0.46);
-          box-shadow: 0 0 0 3px var(--iai-accent-soft), inset 0 1px 2px rgba(15, 23, 42, 0.04);
-        }
-        .prompt-composer.compact textarea {
-          min-height: 24px;
-        }
         textarea {
           width: 100%;
           min-height: 24px;
@@ -505,68 +552,6 @@
           color: #8a94a6;
         }
         textarea:focus { outline: none; }
-        .send-round {
-          display: grid;
-          place-items: center;
-          width: 36px;
-          height: 36px;
-          min-height: 36px;
-          border-radius: 50%;
-          padding: 0;
-          border-color: rgba(var(--iai-accent-rgb), 0.28);
-          background: var(--iai-accent);
-          color: white;
-          font: 800 17px/1 ui-sans-serif, system-ui, sans-serif;
-        }
-        .answer-card-list {
-          display: grid;
-          gap: 0;
-          border: 0;
-          border-radius: 8px;
-          background: transparent;
-          overflow: hidden;
-        }
-        .answer-card {
-          display: grid;
-          gap: 10px;
-          padding: 12px 0;
-          background: transparent;
-        }
-        .answer-card + .answer-card { border-top: 1px solid rgba(122, 101, 86, 0.18); }
-        .answer-card header {
-          display: grid;
-          grid-template-columns: minmax(0, 1fr) auto;
-          gap: 8px;
-          align-items: start;
-        }
-        .answer-card h3 {
-          margin: 0;
-          color: var(--iai-accent-strong);
-          font: 650 13px/1.45 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
-        }
-        .card-actions {
-          display: flex;
-          gap: 6px;
-        }
-        .delete-answer {
-          display: grid;
-          place-items: center;
-          width: 24px;
-          height: 24px;
-          min-height: 24px;
-          border-color: transparent;
-          border-radius: 50%;
-          padding: 0;
-          background: transparent;
-          color: rgba(180, 35, 24, 0.76);
-          font: 900 16px/1 ui-sans-serif, system-ui, sans-serif;
-        }
-        .delete-answer:hover,
-        .delete-answer:focus-visible {
-          background: rgba(180, 35, 24, 0.08);
-          box-shadow: none;
-          transform: none;
-        }
         .response {
           border: 1px solid var(--iai-line);
           border-radius: 8px;
@@ -576,36 +561,6 @@
           font: 14px/1.7 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
           letter-spacing: 0;
           overflow-wrap: anywhere;
-        }
-        .answer-card .response,
-        .thread-message .response {
-          border: 0;
-          padding: 0;
-          background: transparent;
-        }
-        .thread-list {
-          display: grid;
-          gap: 12px;
-        }
-        .thread-message {
-          display: grid;
-          grid-template-columns: minmax(0, 1fr) auto;
-          gap: 6px;
-        }
-        .thread-message h3 {
-          grid-column: 1;
-          margin: 0;
-          color: var(--iai-accent-strong);
-          font: 650 13px/1.45 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
-          letter-spacing: 0;
-        }
-        .thread-message .response {
-          grid-column: 1 / -1;
-        }
-        .thread-message .delete-answer {
-          grid-column: 2;
-          grid-row: 1;
-          align-self: start;
         }
         .more-wrap {
           position: relative;
@@ -645,33 +600,6 @@
           padding: 9px;
           background: #111827;
           color: #f9fafb;
-        }
-        .interaction-stack .button,
-        .interaction-stack .icon-button,
-        .interaction-stack .scope-select {
-          border-color: var(--iai-note-line);
-          border-radius: 4px;
-          background: var(--iai-note-paper);
-        }
-        .interaction-stack .button.primary {
-          border-color: var(--iai-accent);
-          background: var(--iai-accent);
-        }
-        .interaction-stack .icon-button {
-          border-color: transparent;
-          background: transparent;
-        }
-        .interaction-stack .response {
-          font-family: ui-serif, "Songti SC", "Noto Serif CJK SC", STSong, Georgia, serif;
-        }
-        .interaction-stack .answer-card h3,
-        .interaction-stack .thread-message h3 {
-          font-family: ui-serif, "Songti SC", "Noto Serif CJK SC", STSong, Georgia, serif;
-        }
-        .interaction-stack .response code { border-radius: 2px; }
-        .interaction-stack .more-menu {
-          border-radius: 4px;
-          background: var(--iai-note-paper);
         }
         .notice {
           border-left: 3px solid var(--iai-accent);
@@ -776,21 +704,29 @@
           justify-content: center;
           gap: 0;
           max-width: min(390px, calc(100vw - 32px));
-          min-width: 40px;
+          min-width: 44px;
           height: 40px;
           border: 0;
           border-radius: 999px;
-          padding: 0 14px;
+          padding: 0 15px;
           overflow: hidden;
           background: var(--iai-accent-strong);
           color: #fff;
-          box-shadow: 0 12px 28px rgba(15, 23, 42, 0.24), 0 2px 7px rgba(var(--iai-accent-rgb), 0.22);
+          box-shadow: 0 12px 26px var(--iai-accent-shadow, rgba(71, 43, 28, 0.18));
           cursor: grab;
           pointer-events: auto;
           font: 750 13px/1 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
           white-space: nowrap;
           transform-origin: right center;
-          transition: padding 180ms ease, border-radius 180ms ease, transform 180ms ease, opacity 180ms ease, box-shadow 180ms ease;
+          transition:
+            width 300ms cubic-bezier(.2, .8, .2, 1),
+            min-width 300ms cubic-bezier(.2, .8, .2, 1),
+            height 300ms cubic-bezier(.2, .8, .2, 1),
+            padding 300ms cubic-bezier(.2, .8, .2, 1),
+            border-radius 300ms cubic-bezier(.2, .8, .2, 1),
+            transform 300ms cubic-bezier(.2, .8, .2, 1),
+            opacity 180ms ease,
+            box-shadow 300ms ease;
         }
         #annotation-basket:hover {
           box-shadow: 0 15px 34px rgba(15, 23, 42, 0.28), 0 3px 9px rgba(var(--iai-accent-rgb), 0.26);
@@ -815,9 +751,7 @@
           color: #fff;
           font-size: 14px;
         }
-        #annotation-basket.compacting {
-          transform: scale(0.94);
-        }
+        #annotation-basket.compacting { animation: annotation-basket-pre-collapse 200ms ease both; }
         #annotation-basket.compacting .annotation-basket-label,
         #annotation-basket.compact .annotation-basket-label {
           max-width: 0;
@@ -832,7 +766,7 @@
           padding: 0;
           border-radius: 50%;
           font-size: 14px;
-          animation: annotation-basket-settle 220ms cubic-bezier(.2, .8, .2, 1);
+          animation: annotation-basket-settle 300ms cubic-bezier(.2, .8, .2, 1);
         }
         #annotation-basket.copied {
           padding-inline: 15px;
@@ -842,9 +776,14 @@
         }
         #annotation-basket.dragging { cursor: grabbing; transform: scale(0.96); opacity: 0.72; }
         #annotation-basket:focus-visible { outline: 3px solid rgba(var(--iai-accent-rgb), 0.32); outline-offset: 3px; }
+        @keyframes annotation-basket-pre-collapse {
+          0% { transform: scale(1); }
+          55% { transform: scale(1.025); }
+          100% { transform: scale(0.985); }
+        }
         @keyframes annotation-basket-settle {
-          0% { transform: scale(0.94); }
-          62% { transform: scale(1.05); }
+          0% { transform: scale(0.96); }
+          70% { transform: scale(1.045); }
           100% { transform: scale(1); }
         }
         #editor-drop-target {
@@ -904,16 +843,14 @@
         .annotation-panel .annotation-footer .button.primary:focus-visible {
           box-shadow: 0 9px 22px rgba(var(--iai-accent-rgb), 0.27);
         }
-        .prompt-composer.annotation-enabled { grid-template-columns: minmax(0, 1fr) auto auto; }
         .annotation-action { color: var(--iai-accent-strong); border-color: rgba(var(--iai-accent-rgb), .32); }
         @media (max-width: 520px) {
           .surface { width: calc(100vw - 18px); }
           .interaction-stack { width: calc(100vw - 18px); min-width: 0; }
           .term-title { max-width: calc(100vw - 120px); font-size: 16px; }
           .surface-body { padding: 10px; }
-          .composer-surface { padding-inline: 9px; }
-          .annotation-standalone span { display: none; }
-          .annotation-standalone { width: 34px; padding: 0; justify-content: center; }
+          .input-row { grid-template-columns: minmax(0, 1fr) 44px 44px; }
+          .input-row.send-only { grid-template-columns: minmax(0, 1fr) 44px; }
         }
         @media (prefers-reduced-motion: reduce) {
           #annotation-basket,
@@ -922,8 +859,10 @@
             transition-duration: 1ms !important;
           }
           #annotation-basket.compacting { transform: none; }
-          .standalone-action,
-          .composer-close { transition-duration: 1ms !important; }
+          .round-action,
+          .response-card,
+          .response-close,
+          .response-favourite { transition-duration: 1ms !important; animation-duration: 1ms !important; }
         }
       </style>
       <button id="bubble" class="hidden" type="button" title="${escapeHtml(t("content.bubbleTitle", currentLanguage()))}" aria-label="${escapeHtml(t("content.bubbleTitle", currentLanguage()))}"></button>
@@ -942,6 +881,8 @@
     interactionStack = shadow.getElementById("interaction-stack");
     answerSurface = shadow.getElementById("answer-surface");
     composerSurface = shadow.getElementById("composer-surface");
+    quoteChip = shadow.getElementById("quote-chip");
+    inputRow = shadow.getElementById("input-row");
     annotationActionSurface = shadow.getElementById("annotation-action-surface");
     sendActionSurface = shadow.getElementById("send-action-surface");
     composerError = shadow.getElementById("inlineai-error");
@@ -1110,7 +1051,17 @@
           event.preventDefault();
           event.stopPropagation();
           openAnnotationPanel(hit.annotationId);
+          return;
         }
+      }
+      if (UI.shouldCloseInteraction({
+        open: Boolean(interactionStack && !interactionStack.classList.contains("hidden")),
+        mode: panelState?.mode,
+        inside: isInlineAiComposedEvent(event),
+        now: Date.now(),
+        suppressUntil: suppressOutsideCloseUntil
+      })) {
+        closePanel();
       }
       return;
     }
@@ -1122,6 +1073,9 @@
 
   function handleDocumentKeydown(event) {
     if (event.key === "Escape") {
+      if (panelIsOpen()) {
+        closePanel();
+      }
       hideBubble();
       return;
     }
@@ -1157,6 +1111,15 @@
       sendQuestion({ followup: false });
     } else if (action === "send-followup") {
       sendQuestion({ followup: true });
+    } else if (action === "toggle-answer-collapse") {
+      if (suppressPanelHeaderClick) {
+        suppressPanelHeaderClick = false;
+        return;
+      }
+      const selection = shadow.getSelection?.() || document.getSelection();
+      if (!selection || selection.isCollapsed) {
+        toggleInteractionCollapse();
+      }
     } else if (action === "show-followup") {
       selectCardFromButton(button);
       renderFollowupPanel();
@@ -1223,13 +1186,13 @@
   function handleDragStart(event) {
     const resizeHandle = event.target?.closest?.(".resize-handle");
     if (resizeHandle) {
-      const surface = resizeHandle.closest(".surface");
+      const surface = resizeHandle.closest(".surface, .answer-surface");
       const motionTarget = surface.closest(".interaction-stack") || surface;
       const rect = motionTarget.getBoundingClientRect();
       const heightRect = surface.getBoundingClientRect();
       resizeState = {
         surface: motionTarget,
-        heightTarget: motionTarget === interactionStack ? surface : motionTarget,
+        heightTarget: motionTarget === interactionStack ? answerSurface : motionTarget,
         corner: resizeHandle.dataset.resize,
         startX: event.clientX,
         startY: event.clientY,
@@ -1242,12 +1205,12 @@
       return;
     }
 
-    const header = event.target?.closest?.(".surface-header");
-    if (!header || event.target?.closest?.("button,select")) {
+    const header = event.target?.closest?.(".surface-header, .response-card.latest .response-question");
+    if (!header || (event.target?.closest?.("button,select") && !event.target?.closest?.(".response-question"))) {
       return;
     }
 
-    const surface = header.closest(".surface");
+    const surface = header.closest(".surface") || interactionStack;
     const motionTarget = surface.closest(".interaction-stack") || surface;
     const rect = motionTarget.getBoundingClientRect();
     dragState = {
@@ -1411,6 +1374,7 @@
     pinCurrentPanelSnapshot();
     prepareTemporaryPanelState();
     hideBubble();
+    suppressOutsideCloseUntil = Date.now() + 350;
     renderQuestionPanel();
     showPanel(anchorRect || selectionState.rect);
   }
@@ -1628,7 +1592,7 @@
   function renderQuestionPanel() {
     panelState.mode = "inputReady";
     showInteractionSurfaces({ answer: false, composer: true });
-    renderComposerSurface({ followup: false, annotation: true, close: true });
+    renderComposerSurface({ followup: false, annotation: true });
     focusQuestionSoon();
   }
 
@@ -1636,21 +1600,17 @@
     panelState.mode = loading ? "answerLoading" : (panelState.savedMemoryId || panelState.currentCard?.memory ? "savedThread" : "answerReady");
     showInteractionSurfaces({ answer: true, composer: true });
     answerSurface.className = answerSurfaceClass();
-    answerSurface.innerHTML = surfaceShell(panelState.term, "", `
-      ${renderThread(panelState.currentCard, { loading })}
-      <div id="inlineai-actions-after" class="actions">${loading ? "" : answerActions()}</div>
-    `);
+    answerSurface.innerHTML = `${renderThread(panelState.currentCard, { loading })}${resizeHandles()}`;
     renderComposerSurface({ followup: true, disabled: loading });
     updateSelectionActions();
+    keepInteractionInViewport();
   }
 
   function renderFollowupPanel() {
     panelState.mode = "followupInput";
     showInteractionSurfaces({ answer: true, composer: true });
     answerSurface.className = answerSurfaceClass();
-    answerSurface.innerHTML = surfaceShell(panelState.term, "", `
-      ${renderThread(panelState.currentCard)}
-    `);
+    answerSurface.innerHTML = `${renderThread(panelState.currentCard)}${resizeHandles()}`;
     renderComposerSurface({ followup: true });
     focusQuestionSoon();
   }
@@ -1675,9 +1635,7 @@
 
     showInteractionSurfaces({ answer: true, composer: false });
     answerSurface.className = answerSurfaceClass();
-    answerSurface.innerHTML = surfaceShell(panelState.term, "", `
-      ${renderMemoryCards(cards)}
-    `);
+    answerSurface.innerHTML = `${renderMemoryCards(cards)}${resizeHandles()}`;
     showPanel(anchorRect);
   }
 
@@ -1685,8 +1643,11 @@
     panel?.classList.add("hidden");
     interactionStack?.classList.remove("hidden");
     interactionStack?.classList.toggle("answer-collapsed", Boolean(panelState?.collapsed));
+    updateQuoteChip();
+    quoteChip?.classList.toggle("hidden", !(visible.answer || visible.composer));
+    inputRow?.classList.toggle("hidden", !visible.composer);
+    composerSurface?.classList.remove("hidden");
     answerSurface?.classList.toggle("hidden", !visible.answer);
-    composerSurface?.classList.toggle("hidden", !visible.composer);
     if (!visible.composer) {
       annotationActionSurface?.classList.add("hidden");
       sendActionSurface?.classList.add("hidden");
@@ -1694,25 +1655,21 @@
     }
   }
 
-  function renderComposerSurface({ followup = false, annotation = false, close = false, disabled = false } = {}) {
+  function renderComposerSurface({ followup = false, annotation = false, disabled = false } = {}) {
     const annotationLabel = t("content.saveAnnotation", currentLanguage());
     const sendLabel = t(followup ? "content.sendFollowup" : "content.sendQuestion", currentLanguage());
-    interactionStack.classList.toggle("followup-mode", followup);
+    inputRow.classList.toggle("send-only", !annotation);
     composerSurface.innerHTML = UI.composerMarkup({
-      close,
       disabled,
       maxLength: LIMITS.maxAnnotationNoteLength,
       inputLabel: t(followup ? "content.followupAria" : "content.customQuestionAria", currentLanguage()),
-      placeholder: t(followup ? "content.followupComposerPlaceholder" : "content.askPlaceholder", currentLanguage()),
-      closeLabel: t("content.close", currentLanguage())
+      placeholder: t(followup ? "content.followupComposerPlaceholder" : "content.askPlaceholder", currentLanguage())
     });
-    annotationActionSurface.innerHTML = UI.annotationActionMarkup(t("content.annotation", currentLanguage()));
     annotationActionSurface.dataset.action = "save-annotation";
     annotationActionSurface.title = annotationLabel;
     annotationActionSurface.setAttribute("aria-label", annotationLabel);
     annotationActionSurface.disabled = disabled;
     annotationActionSurface.classList.toggle("hidden", !annotation);
-    sendActionSurface.innerHTML = UI.sendActionMarkup();
     sendActionSurface.dataset.action = followup ? "send-followup" : "send-new";
     sendActionSurface.title = sendLabel;
     sendActionSurface.setAttribute("aria-label", sendLabel);
@@ -1720,6 +1677,17 @@
     sendActionSurface.classList.remove("hidden");
     composerError.textContent = "";
     composerError.classList.add("hidden");
+  }
+
+  function updateQuoteChip() {
+    if (!quoteChip) {
+      return;
+    }
+    const quote = normalizeVisibleText(panelState?.term || selectionState?.term || "");
+    const label = `${t("content.selectedText", currentLanguage())}: ${quote}`;
+    quoteChip.textContent = truncateTitle(quote, 72);
+    quoteChip.title = label;
+    quoteChip.setAttribute("aria-label", label);
   }
 
   function surfaceShell(term, _eyebrow, body, options = {}) {
@@ -1743,73 +1711,67 @@
     `;
   }
 
-  function answerActions() {
-    const excerpt = getSelectedResponseExcerpt();
-    const isSaved = Boolean(panelState?.savedMemoryId || panelState?.currentCard?.memory);
-    if (!panelState?.currentCard) {
-      return "";
-    }
-    if (!isSaved) {
-      const saveAction = excerpt ? "save-excerpt" : "save-answer";
-      return `
-        <button class="button primary" id="inlineai-save-button" type="button" data-action="${saveAction}">${escapeHtml(excerpt ? t("content.saveExcerpt", currentLanguage()) : t("content.save", currentLanguage()))}</button>
-      `;
-    }
-
-    return "";
-  }
-
   function renderMemoryCards(cards) {
     if (!cards.length) {
       return `<div class="notice">${escapeHtml(t("content.noSavedAnswers", currentLanguage()))}</div>`;
     }
-
-    return `
-      <div class="answer-card-list">
-        ${cards.map((card) => `
-          <article class="answer-card" data-memory-id="${escapeHtml(card.memory.id)}" data-card-id="${escapeHtml(card.id)}">
-            ${renderThread(card)}
-          </article>
-        `).join("")}
-      </div>
-    `;
+    const messages = cards
+      .flatMap((card) => threadMessages(card))
+      .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    return renderResponseMessages(messages);
   }
 
   function renderThread(card, { loading = false } = {}) {
-    if (!card) {
-      if (loading) {
-        const query = displayQuery({ query: panelState?.pendingQuery || "", queryKind: panelState?.pendingQueryKind || "default" }, panelState?.term || "");
-        return `<article class="thread-message"><h3>${escapeHtml(query)}</h3><div id="inlineai-response" class="response"></div></article>`;
-      }
-      return `<div id="inlineai-response" class="response ${loading ? "" : "hidden"}"></div>`;
+    const messages = card ? threadMessages(card) : [];
+    if (loading) {
+      messages.unshift({
+        query: displayQuery({ query: panelState?.pendingQuery || "", queryKind: panelState?.pendingQueryKind || "default" }, panelState?.term || ""),
+        response: "",
+        createdAt: Number.MAX_SAFE_INTEGER,
+        loading: true,
+        saved: false
+      });
     }
+    return renderResponseMessages(messages);
+  }
+
+  function threadMessages(card) {
     const followups = card.followups || [];
-    const messages = [
+    const saved = Boolean(card.memory || panelState?.savedMemoryId);
+    return [
       ...followups.map((item) => ({
         query: displayQuery(item, card.term || card.memory?.term),
         response: item.response || "",
-        createdAt: item.createdAt || 0
+        createdAt: item.createdAt || 0,
+        saved
       })),
       {
         query: displayQuery(card, card.term || card.memory?.term),
         response: card.response || "",
         createdAt: card.createdAt || 0,
-        memoryId: card.memory?.id || "",
-        cardId: card.id || ""
+        saved
       }
     ].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-    return `
-      <div class="thread-list">
-        ${loading ? `<article class="thread-message"><h3>${escapeHtml(t("content.answering", currentLanguage()))}</h3><div id="inlineai-response" class="response"></div></article>` : ""}
-        ${messages.map((item) => `
-          <article class="thread-message">
-            <h3>${escapeHtml(item.query)}</h3>
-            ${item.memoryId && item.cardId ? `<button class="button delete-answer" type="button" data-action="delete-card" data-memory-id="${escapeHtml(item.memoryId)}" data-card-id="${escapeHtml(item.cardId)}" title="${escapeHtml(t("content.delete", currentLanguage()))}" aria-label="${escapeHtml(t("content.deleteSavedAnswer", currentLanguage()))}">×</button>` : ""}
-            <div class="response">${renderMarkdown(item.response || "")}</div>
-          </article>
-        `).join("")}
-      </div>
-    `;
+  }
+
+  function renderResponseMessages(messages) {
+    return messages.map((item, index) => {
+      const latest = index === 0;
+      const showSave = latest && !item.loading;
+      const saveLabel = item.saved ? t("content.savedToHistory", currentLanguage()) : t("content.save", currentLanguage());
+      return UI.responseCardMarkup({
+        query: item.query,
+        responseHtml: renderMarkdown(item.response || ""),
+        responseId: item.loading ? "inlineai-response" : "",
+        loading: item.loading,
+        latest,
+        showSave,
+        saved: item.saved,
+        saveAction: "save-answer",
+        saveLabel,
+        closeLabel: t("content.close", currentLanguage())
+      });
+    }).join("");
   }
 
   function displayQuery(item, term) {
@@ -2031,9 +1993,7 @@
       panelState.savedMemoryId = "";
       showInteractionSurfaces({ answer: true, composer: false });
       answerSurface.className = answerSurfaceClass();
-      answerSurface.innerHTML = surfaceShell(panelState.term, "", `
-        <div class="notice">${escapeHtml(t("content.recordDeleted", currentLanguage()))}</div>
-      `);
+      answerSurface.innerHTML = `<div class="notice">${escapeHtml(t("content.recordDeleted", currentLanguage()))}</div>`;
     }
   }
 
@@ -2041,15 +2001,21 @@
     if (!surface) {
       return;
     }
-    if ((surface.id === "panel" || surface.id === "answer-surface") && panelState) {
+    if (surface.id === "panel" && panelState) {
       panelState.collapsed = !panelState.collapsed;
       surface.classList.toggle("collapsed", panelState.collapsed);
-      if (surface.id === "answer-surface") {
-        interactionStack.classList.toggle("answer-collapsed", panelState.collapsed);
-      }
       return;
     }
     surface.classList.toggle("collapsed");
+  }
+
+  function toggleInteractionCollapse() {
+    if (!panelState || !answerSurface || answerSurface.classList.contains("hidden")) {
+      return;
+    }
+    panelState.collapsed = !panelState.collapsed;
+    interactionStack.classList.toggle("answer-collapsed", panelState.collapsed);
+    keepInteractionInViewport();
   }
 
   function openMemoryFromMark(mark) {
@@ -2084,10 +2050,8 @@
 
   function answerSurfaceClass() {
     return [
-      "surface",
-      "interaction-surface",
       "answer-surface",
-      panelState?.collapsed ? "collapsed" : ""
+      "response-stack"
     ].filter(Boolean).join(" ");
   }
 
@@ -2118,29 +2082,27 @@
       return;
     }
 
-    const source = answerSurface && !answerSurface.classList.contains("hidden") ? answerSurface : panel;
-    const sourceRect = source === answerSurface ? interactionStack.getBoundingClientRect() : source.getBoundingClientRect();
+    const source = answerSurface?.querySelector(".response-card.latest");
+    if (!source) {
+      return;
+    }
+    const sourceRect = source.getBoundingClientRect();
     const snapshot = source.cloneNode(true);
     snapshot.id = createId("pinned");
     snapshot.dataset.inlineaiPinnedPanel = String(++pinnedPanelCounter);
-    snapshot.classList.remove("hidden", "interaction-surface", "answer-surface");
+    snapshot.classList.remove("latest");
+    snapshot.classList.add("pinned-response-card");
     snapshot.style.left = `${sourceRect.left}px`;
     snapshot.style.top = `${sourceRect.top}px`;
     snapshot.style.width = `${sourceRect.width}px`;
-    snapshot.style.height = `${Math.min(sourceRect.height, window.innerHeight - 24)}px`;
     snapshot.querySelectorAll("[id]").forEach((node) => node.removeAttribute("id"));
-    snapshot.querySelectorAll("textarea,input,select").forEach((node) => {
-      node.disabled = true;
-    });
+    snapshot.querySelectorAll(".response-favourite, .resize-handle").forEach((node) => node.remove());
     snapshot.querySelectorAll("[data-action]").forEach((node) => {
       if (node.dataset.action === "close") {
         node.dataset.action = "close-pinned";
         return;
       }
       node.removeAttribute("data-action");
-      if ("disabled" in node) {
-        node.disabled = true;
-      }
       node.setAttribute("aria-disabled", "true");
     });
     shadow.insertBefore(snapshot, interactionStack);
@@ -2382,6 +2344,20 @@
     window.requestAnimationFrame(() => positionElement(target, anchorRect, { mode: "panel" }));
   }
 
+  function keepInteractionInViewport() {
+    window.requestAnimationFrame(() => {
+      if (!interactionStack || interactionStack.classList.contains("hidden")) {
+        return;
+      }
+      const margin = 12;
+      const rect = interactionStack.getBoundingClientRect();
+      const left = clamp(rect.left, margin, Math.max(margin, window.innerWidth - rect.width - margin));
+      const top = clamp(rect.top, margin, Math.max(margin, window.innerHeight - rect.height - margin));
+      interactionStack.style.left = `${Math.round(left)}px`;
+      interactionStack.style.top = `${Math.round(top)}px`;
+    });
+  }
+
   function closePanel() {
     if (activePort) {
       activePort.disconnect();
@@ -2390,10 +2366,12 @@
     panel?.classList.add("hidden");
     panel?.classList.remove("collapsed");
     interactionStack?.classList.add("hidden");
-    interactionStack?.classList.remove("answer-collapsed", "followup-mode");
+    interactionStack?.classList.remove("answer-collapsed");
+    quoteChip?.classList.add("hidden");
+    inputRow?.classList.add("hidden");
+    inputRow?.classList.remove("send-only");
     answerSurface?.classList.add("hidden");
-    answerSurface?.classList.remove("collapsed");
-    composerSurface?.classList.add("hidden");
+    answerSurface?.style.removeProperty("height");
     annotationActionSurface?.classList.add("hidden");
     sendActionSurface?.classList.add("hidden");
     composerError?.classList.add("hidden");
@@ -2408,7 +2386,7 @@
   function positionElement(element, anchorRect, options) {
     const margin = 12;
     const rect = element.getBoundingClientRect();
-    const width = rect.width || (options.mode === "bubble" ? 16 : 540);
+    const width = rect.width || (options.mode === "bubble" ? 16 : 560);
     const height = rect.height || (options.mode === "bubble" ? 16 : 280);
 
     if (options.mode === "bubble") {
@@ -2427,9 +2405,9 @@
 
     const center = anchorRect.left + anchorRect.width / 2;
     let left = center - width / 2;
-    let top = anchorRect.bottom + 10;
+    let top = anchorRect.bottom + 12;
     if (top + height > window.innerHeight - margin) {
-      top = anchorRect.top - height - 10;
+      top = anchorRect.top - height - 12;
     }
     if (top + height > window.innerHeight - margin) {
       top = window.innerHeight - height - margin;
@@ -2491,7 +2469,10 @@
   function ensureResponseNode() {
     let responseNode = shadow.getElementById("inlineai-response");
     if (!responseNode) {
-      const body = answerSurface.querySelector(".surface-body");
+      const body = answerSurface.querySelector(".response-card.latest .response-body");
+      if (!body) {
+        throw new Error("Missing active response card");
+      }
       responseNode = document.createElement("div");
       responseNode.id = "inlineai-response";
       responseNode.className = "response";
@@ -2503,9 +2484,11 @@
   function updateSelectionActions() {
     const excerpt = getSelectedResponseExcerpt();
     const save = shadow.getElementById("inlineai-save-button");
-    if (save) {
-      save.textContent = excerpt ? t("content.saveExcerpt", currentLanguage()) : t("content.save", currentLanguage());
+    if (save && save.getAttribute("aria-disabled") !== "true") {
+      const label = excerpt ? t("content.saveExcerpt", currentLanguage()) : t("content.save", currentLanguage());
       save.dataset.action = excerpt ? "save-excerpt" : "save-answer";
+      save.title = label;
+      save.setAttribute("aria-label", label);
     }
   }
 
@@ -2607,6 +2590,7 @@
       panel.setAttribute("aria-label", t("app.dialogLabel", currentLanguage()));
     }
     interactionStack?.setAttribute("aria-label", t("app.dialogLabel", currentLanguage()));
+    updateQuoteChip();
     if (activeAnnotationBatch) {
       renderAnnotationBasket(false);
     }
@@ -2777,7 +2761,7 @@
     if (showExpanded && !copied) {
       annotationBasketTimer = window.setTimeout(() => {
         annotationBasket.classList.add("compacting");
-        annotationBasketCompactTimer = window.setTimeout(() => renderAnnotationBasket(false), 180);
+        annotationBasketCompactTimer = window.setTimeout(() => renderAnnotationBasket(false), 200);
       }, 4000);
     }
   }

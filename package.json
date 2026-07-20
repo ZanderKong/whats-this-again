@@ -1,6 +1,6 @@
 {
   "name": "whats-this-again",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "private": false,
   "description": "Chrome extension for contextual AI explanations and reusable local reading memories.",
   "type": "module",

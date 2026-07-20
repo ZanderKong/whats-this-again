@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.1
+
+- Replaced the 0.5.0 interaction visual layer with the approved dark-pill prototype treatment: a 44px pill composer, separate icon-only annotation/send actions, a quote chip, and 26px response cards.
+- Rebuilt the interaction DOM around `#quote-chip`, `#input-row`, `#composer-surface`, `#annotation-action-surface`, `#send-action-surface`, and `#answer-surface`; removed the obsolete standalone-action, composer-close, and note-token styles rather than layering overrides on top.
+- Added outside-click/Escape close behavior with long-press opening-click suppression, compact answer-card collapse/restore, unringed close/save corners, streaming caret, and reduced-motion coverage.
+- Kept real requests, annotations, history, saving, drag insertion, copy fallback, Prompt generation, theme storage, providers, and Schema 3 unchanged.
+
 ## 0.5.0
 
 - Split the answer, input, annotation action, and send action into direct sibling Shadow DOM units with paper-and-ink styling, stable test selectors, responsive controls, IME-safe Enter handling, and reduced-motion support.

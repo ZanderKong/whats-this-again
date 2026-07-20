@@ -65,7 +65,7 @@
 
 ## 当前版本
 
-- 扩展版本：`0.5.0`
+- 扩展版本：`0.5.1`
 - Manifest：Chrome Manifest V3
 - Landing page：`docs/index.html`
 - 数据存储：`chrome.storage.local`
