@@ -62,6 +62,38 @@ test("history hover ignores collapsed panels but still avoids expanded surfaces"
   assert.match(ui, /function canShowHistoryHint\(\{ annotationOpen = false, panels = \[\] \} = \{\}\)/);
 });
 
+test("privacy disclosure documents the existing model data flow without changing context behavior", () => {
+  const constants = readFileSync("src/shared/constants.js", "utf8");
+  const options = readFileSync("src/options/options.html", "utf8");
+  const onboarding = readFileSync("src/onboarding/onboarding.html", "utf8");
+  const readme = readFileSync("README.md", "utf8");
+  const readmeEn = readFileSync("README.en.md", "utf8");
+  const site = readFileSync("docs/index.html", "utf8");
+  const siteEn = readFileSync("docs/en/index.html", "utf8");
+  assert.match(constants, /options\.privacyNotice/);
+  assert.match(constants, /onboarding\.modelBody[\s\S]*?敏感内容/);
+  assert.match(options, /data-i18n="options\.privacyNotice"/);
+  assert.match(onboarding, /id="connection-panel"/);
+  assert.match(readme, /并非操作系统密码库/);
+  assert.match(readmeEn, /not an operating-system password vault/);
+  assert.match(site, /不是系统密码库/);
+  assert.match(siteEn, /not a system password vault/);
+  assert.match(constants, /includePageContext: true/);
+});
+
+test("internal prototype and delivery artifacts are ignored", () => {
+  const ignore = readFileSync(".gitignore", "utf8");
+  for (const path of [
+    "ui-mockup.html",
+    "whats_this_again_prototype_ui_onboarding_prompt_plan.md",
+    "IMPLEMENTATION_REPORT.md",
+    "docs/test-report.md",
+    "docs/ui-prototype-audit.md"
+  ]) {
+    assert.match(ignore, new RegExp(`^${path.replace(/[.*+?^${}()|[\\]\\]/g, "\\\\$&")}$`, "m"));
+  }
+});
+
 test("settings removes arbitrary color input but keeps preset controls", () => {
   const options = readFileSync("src/options/options.html", "utf8");
   assert.doesNotMatch(options, /type="color"/);

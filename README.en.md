@@ -136,6 +136,8 @@ The extension writes to the clipboard only after a failed drag insertion or an e
 
 When using third-party model services, follow their privacy policies and data terms.
 
+The extension runs on ordinary `http/https` pages to provide selected-text explanations. `chrome.storage.local` is local browser storage, not an operating-system password vault; do not enter API Keys on untrusted browser profiles, devices, or model services, and do not select or send sensitive content.
+
 ## Permissions
 
 `manifest.json` uses these permissions:

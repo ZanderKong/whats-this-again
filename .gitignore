@@ -4,6 +4,11 @@ node_modules/
 dist/
 archive/
 InlineAI_Project_Spec_v0.1.md
+ui-mockup.html
+whats_this_again_prototype_ui_onboarding_prompt_plan.md
+IMPLEMENTATION_REPORT.md
+docs/test-report.md
+docs/ui-prototype-audit.md
 *.zip
 *.crx
 *.pem
