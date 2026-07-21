@@ -62,7 +62,8 @@
     };
   }
 
-  function textNodes(root) {
+  function textNodes(root, cache) {
+    if (cache?.nodesByRoot?.has(root)) return cache.nodesByRoot.get(root);
     const nodes = [];
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
       acceptNode(node) {
@@ -73,16 +74,17 @@
       }
     });
     while (walker.nextNode()) nodes.push(walker.currentNode);
+    cache?.nodesByRoot?.set(root, nodes);
     return nodes;
   }
 
-  function rangeFromOffsets(root, start, end) {
+  function rangeFromOffsets(root, start, end, cache) {
     let cursor = 0;
     let startNode = null;
     let endNode = null;
     let startOffset = 0;
     let endOffset = 0;
-    for (const node of textNodes(root)) {
+    for (const node of textNodes(root, cache)) {
       const next = cursor + node.nodeValue.length;
       if (!startNode && start >= cursor && start <= next) {
         startNode = node;
@@ -102,7 +104,14 @@
     return range;
   }
 
-  function rootsForAnchor(anchor) {
+  function rootText(root, cache) {
+    if (cache?.textByRoot?.has(root)) return cache.textByRoot.get(root);
+    const text = anchorText(root);
+    cache?.textByRoot?.set(root, text);
+    return text;
+  }
+
+  function rootsForAnchor(anchor, cache) {
     const hint = anchor?.rootHint || {};
     const selectors = [];
     if (hint.testId) selectors.push(`[data-testid="${CSS.escape(hint.testId)}"]`);
@@ -111,15 +120,18 @@
     if (/^[A-Za-z][A-Za-z0-9-]*$/.test(hint.tagName || "")) selectors.push(hint.tagName.toLowerCase());
     selectors.push("[data-message-author-role='assistant']", "article", "[role='article']", "main", "body");
     const seen = new Set();
-    return selectors.flatMap((selector) => Array.from(document.querySelectorAll(selector))).filter((root) => {
-      if (seen.has(root) || !anchorText(root).includes(anchor.exact)) return false;
+    return selectors.flatMap((selector) => {
+      if (!cache?.rootsBySelector?.has(selector)) cache?.rootsBySelector?.set(selector, Array.from(document.querySelectorAll(selector)));
+      return cache?.rootsBySelector?.get(selector) || Array.from(document.querySelectorAll(selector));
+    }).filter((root) => {
+      if (seen.has(root) || !rootText(root, cache).includes(anchor.exact)) return false;
       seen.add(root);
       return true;
     });
   }
 
-  function candidatesInRoot(root, anchor) {
-    const text = anchorText(root);
+  function candidatesInRoot(root, anchor, cache) {
+    const text = rootText(root, cache);
     const candidates = [];
     let offset = 0;
     while (offset <= text.length) {
@@ -149,18 +161,32 @@
     return count;
   }
 
-  function restoreAnchor(anchor) {
+  function createRestoreCache() {
+    return { rootsBySelector: new Map(), textByRoot: new WeakMap(), nodesByRoot: new WeakMap() };
+  }
+
+  function restoreAnchorWithCache(anchor, cache, bodyText) {
     if (!anchor?.exact) return { range: null, matchCount: 0 };
-    const candidates = rootsForAnchor(anchor).flatMap((root) => candidatesInRoot(root, anchor));
-    const pageMatchCount = exactMatchCount(anchorText(document.body), anchor.exact);
+    const candidates = rootsForAnchor(anchor, cache).flatMap((root) => candidatesInRoot(root, anchor, cache));
+    const pageMatchCount = exactMatchCount(bodyText, anchor.exact);
     candidates.sort((left, right) => left.score - right.score);
     for (const candidate of candidates) {
-      const range = rangeFromOffsets(candidate.root, candidate.index, candidate.index + anchor.exact.length);
+      const range = rangeFromOffsets(candidate.root, candidate.index, candidate.index + anchor.exact.length, cache);
       if (range && A.comparableText(range.toString()) === A.comparableText(anchor.exact)) {
         return { range, matchCount: Math.max(1, pageMatchCount) };
       }
     }
     return { range: null, matchCount: pageMatchCount };
+  }
+
+  function restoreAnchor(anchor) {
+    return restoreAnchorWithCache(anchor, createRestoreCache(), anchorText(document.body));
+  }
+
+  function restoreAnchors(items) {
+    const cache = createRestoreCache();
+    const bodyText = anchorText(document.body);
+    return new Map((items || []).map((item) => [item.id, restoreAnchorWithCache(item.anchor, cache, bodyText)]));
   }
 
   function isVisible(element) {
@@ -384,7 +410,7 @@
   }
 
   global.InlineAIAnnotationRuntime = Object.freeze({
-    createAnchor, restoreAnchor, findReadableRoot, EDITOR_ADAPTERS, findAdapter,
+    createAnchor, restoreAnchor, restoreAnchors, findReadableRoot, EDITOR_ADAPTERS, findAdapter,
     editorAtPoint, likelyEditor, injectAndVerify, verifyInsertedText, copyTextToClipboard,
     nodeText, isVisible
   });

@@ -20,11 +20,11 @@ function storage(initial) {
   };
 }
 
-test("migrates schema 1 to 3 while preserving settings and memories", async () => {
+test("migrates schema 1 to 4 while preserving settings and memories", async () => {
   const C = loadConstants();
   const area = storage({ inlineai_schema_version: 1, inlineai_settings: { model: "keep" }, inlineai_memories: { m1: { id: "m1" } }, inlineai_terms: {}, inlineai_answers: {} });
   await C.ensureStorageSchema(area);
-  assert.equal(area.data.inlineai_schema_version, 3);
+  assert.equal(area.data.inlineai_schema_version, 4);
   assert.equal(area.data.inlineai_settings.model, "keep");
   assert.equal(area.data.inlineai_memories.m1.id, "m1");
   assert.deepEqual(area.data.inlineai_annotation_batches, {});
@@ -34,7 +34,7 @@ test("migrates schema 1 to 3 while preserving settings and memories", async () =
 
 test("preserves existing annotations and is idempotent", async () => {
   const C = loadConstants();
-  const initial = { inlineai_schema_version: 3, inlineai_memories: {}, inlineai_annotation_batches: { b1: { id: "b1" } }, inlineai_active_annotation_batches: { page: "b1" } };
+  const initial = { inlineai_schema_version: 4, inlineai_memories: {}, inlineai_annotation_batches: { b1: { id: "b1" } }, inlineai_active_annotation_batches: { page: "b1" } };
   const area = storage(initial);
   await C.ensureStorageSchema(area);
   await C.ensureStorageSchema(area);
@@ -52,9 +52,42 @@ test("migrates arbitrary theme colors to the curated default", async () => {
     inlineai_active_annotation_batches: {}
   });
   await C.ensureStorageSchema(area);
-  assert.equal(area.data.inlineai_schema_version, 3);
+  assert.equal(area.data.inlineai_schema_version, 4);
   assert.equal(area.data.inlineai_settings.model, "keep");
   assert.equal(area.data.inlineai_settings.highlightColor, "#c98257");
+});
+
+test("splits legacy thread cards into one saved card per answer without duplication", async () => {
+  const C = loadConstants();
+  const area = storage({
+    inlineai_schema_version: 3,
+    inlineai_settings: { model: "keep" },
+    inlineai_memories: {
+      mem1: {
+        id: "mem1",
+        term: "term",
+        cards: [{
+          id: "root-answer",
+          query: "root question",
+          response: "root answer",
+          createdAt: 10,
+          followups: [{ id: "follow-answer", query: "follow question", response: "follow answer", createdAt: 20 }]
+        }]
+      }
+    },
+    inlineai_annotation_batches: {},
+    inlineai_active_annotation_batches: {}
+  });
+
+  await C.ensureStorageSchema(area);
+  const cards = structuredClone(area.data.inlineai_memories.mem1.cards);
+  await C.ensureStorageSchema(area);
+  assert.equal(area.data.inlineai_schema_version, 4);
+  assert.equal(cards.length, 2);
+  assert.deepEqual(cards.map((card) => card.sourceMessageId), ["root-answer", "follow-answer"]);
+  assert.deepEqual(cards.map((card) => card.parentMessageId), ["", "root-answer"]);
+  assert.equal(cards.some((card) => "followups" in card), false);
+  assert.deepEqual(area.data.inlineai_memories.mem1.cards, cards);
 });
 
 test("preserves all five curated theme presets", () => {

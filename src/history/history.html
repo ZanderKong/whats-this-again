@@ -11,7 +11,7 @@
       <header class="topbar">
         <div>
           <p class="eyebrow" data-i18n="app.name">这是啥来着</p>
-          <h1 id="history-heading" data-i18n="history.heading">全部历史解释</h1>
+          <h1 id="history-heading" data-i18n="history.title">历史记录</h1>
         </div>
         <div class="top-actions">
           <button class="button primary" id="open-options" type="button" data-i18n="history.openOptions">设置</button>
@@ -24,22 +24,19 @@
       </nav>
 
       <section class="toolbar" data-i18n-aria-label="history.toolbarLabel" aria-label="历史筛选">
-        <label class="search">
-          <span data-i18n="history.search">搜索</span>
+        <label class="search" for="search">
+          <span class="sr-only" data-i18n="history.search">搜索</span>
           <input id="search" type="search" data-i18n-placeholder="history.searchPlaceholder" placeholder="保存词、回答内容、网站">
         </label>
-        <label id="scope-filter-wrap">
-          <span data-i18n="history.filter">筛选</span>
-          <select id="scope-filter">
-            <option value="all" data-i18n="history.filterAll">全部</option>
-            <option value="currentPage" data-i18n="history.filterCurrentPage">仅当前页面</option>
-            <option value="currentSite" data-i18n="history.filterCurrentSite">当前网站</option>
-            <option value="global" data-i18n="history.filterGlobal">全部网页</option>
-          </select>
-        </label>
+        <div id="scope-filter-wrap" class="filter-chips" role="group" data-i18n-aria-label="history.filter" aria-label="筛选">
+          <button type="button" class="filter-chip active" data-scope="all" data-i18n="history.filterAll">全部</button>
+          <button type="button" class="filter-chip" data-scope="currentPage" data-i18n="history.filterCurrentPage">仅当前页面</button>
+          <button type="button" class="filter-chip" data-scope="currentSite" data-i18n="history.filterCurrentSite">当前网站</button>
+          <button type="button" class="filter-chip" data-scope="global" data-i18n="history.filterGlobal">全部网页</button>
+        </div>
       </section>
 
-      <p class="summary" id="summary" data-i18n="history.loading">读取历史中...</p>
+      <p class="summary sr-only" id="summary" aria-live="polite" data-i18n="history.loading">读取历史中...</p>
       <section id="history-list" class="history-list" aria-live="polite"></section>
     </main>
 

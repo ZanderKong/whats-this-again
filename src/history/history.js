@@ -13,13 +13,13 @@
 
   const els = {
     search: document.getElementById("search"),
-    scopeFilter: document.getElementById("scope-filter"),
     summary: document.getElementById("summary"),
     list: document.getElementById("history-list"),
     openOptions: document.getElementById("open-options")
   };
   els.heading = document.getElementById("history-heading");
   els.scopeWrap = document.getElementById("scope-filter-wrap");
+  els.scopeChips = Array.from(document.querySelectorAll("[data-scope]"));
   els.tabs = Array.from(document.querySelectorAll("[data-tab]"));
 
   let memories = {};
@@ -30,7 +30,9 @@
   let annotationBatches = {};
   let activeAnnotationBatches = {};
   let currentTab = "explanations";
+  let activeScope = "all";
   const expandedTerms = new Set();
+  const initialExpansionApplied = { explanations: false, annotations: false };
 
   init().catch((error) => {
     els.summary.textContent = t("history.loadFailed", { message: error.message || error }, currentLanguage());
@@ -55,7 +57,10 @@
     applyPageLanguage();
 
     els.search.addEventListener("input", render);
-    els.scopeFilter.addEventListener("change", render);
+    els.scopeChips.forEach((button) => button.addEventListener("click", () => {
+      activeScope = button.dataset.scope || "all";
+      render();
+    }));
     els.openOptions.addEventListener("click", () => chrome.runtime.openOptionsPage());
     els.list.addEventListener("click", handleListClick);
     els.tabs.forEach((button) => button.addEventListener("click", () => switchTab(button.dataset.tab)));
@@ -92,6 +97,11 @@
     const answerCount = groups.reduce((sum, group) => sum + group.cards.length, 0);
     els.summary.textContent = t("history.summary", { terms: groups.length, answers: answerCount }, currentLanguage());
 
+    if (groups.length && !initialExpansionApplied.explanations) {
+      expandedTerms.add(groups[0].key);
+      initialExpansionApplied.explanations = true;
+    }
+
     if (!groups.length) {
       els.list.innerHTML = `<p class="empty">${escapeHtml(t("history.empty", currentLanguage()))}</p>`;
       return;
@@ -115,8 +125,13 @@
       button.classList.toggle("active", active);
       button.setAttribute("aria-current", active ? "page" : "false");
     });
+    els.scopeChips.forEach((button) => {
+      const active = button.dataset.scope === activeScope;
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-pressed", String(active));
+    });
     els.scopeWrap.classList.toggle("hidden", currentTab === "annotations");
-    els.heading.textContent = t(currentTab === "annotations" ? "history.annotationHeading" : "history.heading", currentLanguage());
+    els.heading.textContent = t("history.title", currentLanguage());
     els.search.placeholder = t(currentTab === "annotations" ? "history.annotationSearchPlaceholder" : "history.searchPlaceholder", currentLanguage());
   }
 
@@ -127,6 +142,10 @@
       .sort((left, right) => (right.updatedAt || right.createdAt) - (left.updatedAt || left.createdAt));
     const count = groups.reduce((sum, batch) => sum + batch.items.length, 0);
     els.summary.textContent = t("history.annotationSummary", { batches: groups.length, items: count }, currentLanguage());
+    if (groups.length && !initialExpansionApplied.annotations) {
+      expandedTerms.add(groups[0].id);
+      initialExpansionApplied.annotations = true;
+    }
     if (!groups.length) {
       els.list.innerHTML = `<p class="empty">${escapeHtml(t("history.annotationEmpty", currentLanguage()))}</p>`;
       return;
@@ -138,17 +157,12 @@
     const expanded = expandedTerms.has(batch.id);
     const payload = A.buildAnnotationPrompt(batch, currentLanguage());
     return `<article class="memory${expanded ? " expanded" : ""}" data-batch-id="${escapeHtml(batch.id)}">
-      <header class="memory-header"><div>
-        <h3 class="term">${escapeHtml(batch.pageTitle || batch.siteHost || batch.pageUrl)}</h3>
-        <p class="summary-text">${escapeHtml(snippet(payload, expanded ? 2000 : 280))}</p>
-        <p class="meta"><span>${escapeHtml(batch.siteHost || t("history.unknownSite", currentLanguage()))}</span><span>${escapeHtml(formatDateTime(batch.updatedAt || batch.createdAt))}</span><span class="badge">${escapeHtml(t(A.statusLabelKey(batch.status), currentLanguage()))}</span><span>${batch.items.length}</span></p>
-      </div><div class="actions">
-        <button class="button" type="button" data-action="copy-annotation">${escapeHtml(t("history.copy", currentLanguage()))}</button>
-        <button class="button" type="button" data-action="open-annotation-source">${escapeHtml(t("history.openSource", currentLanguage()))}</button>
-        <button class="button" type="button" data-action="toggle-annotation">${escapeHtml(expanded ? t("history.collapse", currentLanguage()) : t("history.expand", currentLanguage()))}</button>
-        <button class="button danger" type="button" data-action="delete-annotation-batch">${escapeHtml(t("history.delete", currentLanguage()))}</button>
-      </div></header>
-      ${expanded ? `<div class="annotation-items">${batch.items.map((item, index) => `<article class="annotation-item"><strong>${index + 1}</strong><blockquote>${escapeHtml(item.quote)}</blockquote><p>${escapeHtml(item.note)}</p></article>`).join("")}</div>` : ""}
+      <button class="memory-toggle" type="button" data-action="toggle-annotation" aria-expanded="${expanded}" aria-label="${escapeHtml(expanded ? t("history.collapse", currentLanguage()) : t("history.expand", currentLanguage()))}">
+        <span><strong class="term">${escapeHtml(batch.pageTitle || batch.siteHost || batch.pageUrl)}</strong><span class="summary-text">${escapeHtml(snippet(payload, 280))}</span></span>
+        <span class="caret" aria-hidden="true">⌄</span>
+      </button>
+      <p class="meta"><span>${escapeHtml(batch.siteHost || t("history.unknownSite", currentLanguage()))}</span><span>${escapeHtml(formatDateTime(batch.updatedAt || batch.createdAt))}</span><span class="badge">${escapeHtml(t(A.statusLabelKey(batch.status), currentLanguage()))}</span><span>${batch.items.length}</span></p>
+      ${expanded ? `<div class="memory-body"><div class="annotation-items">${batch.items.map((item, index) => `<article class="annotation-item"><strong>${index + 1}</strong><blockquote>${escapeHtml(item.quote)}</blockquote><p>${escapeHtml(item.note)}</p></article>`).join("")}</div><div class="card-actions"><button class="button" type="button" data-action="copy-annotation">${escapeHtml(t("history.copy", currentLanguage()))}</button><button class="button" type="button" data-action="open-annotation-source">${escapeHtml(t("history.openSource", currentLanguage()))}</button><button class="button danger" type="button" data-action="delete-annotation-batch">${escapeHtml(t("history.delete", currentLanguage()))}</button></div></div>` : ""}
     </article>`;
   }
 
@@ -173,7 +187,7 @@
     return Array.from(map.values())
       .map((group) => ({
         ...group,
-        cards: group.cards.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)),
+        cards: group.cards.sort((a, b) => (b.savedAt || b.createdAt || 0) - (a.savedAt || a.createdAt || 0)),
         latestMemory: group.memories.sort((a, b) => (b.updatedAt || b.savedAt || 0) - (a.updatedAt || a.savedAt || 0))[0]
       }))
       .sort((a, b) => (b.latestMemory?.updatedAt || b.latestMemory?.savedAt || 0) - (a.latestMemory?.updatedAt || a.latestMemory?.savedAt || 0));
@@ -181,7 +195,7 @@
 
   function filterGroups(items) {
     const query = normalize(els.search.value).toLowerCase();
-    const scope = els.scopeFilter.value;
+    const scope = activeScope;
     return items
       .filter((group) => !query || searchableText(group).includes(query))
       .filter((group) => {
@@ -204,30 +218,12 @@
     const isExpanded = expandedTerms.has(group.key);
     return `
       <article class="memory${isExpanded ? " expanded" : ""}" data-term-key="${escapeHtml(group.key)}">
-        <header class="memory-header">
-          <div>
-            <h3 class="term">${escapeHtml(group.term || "")}</h3>
-            <p class="summary-text">${escapeHtml(snippet(latest.response || t("history.noSummary", currentLanguage()), isExpanded ? 1200 : 260))}</p>
-            <p class="meta">
-              <span>${escapeHtml(memory.siteHost || t("history.unknownSite", currentLanguage()))}</span>
-              <span>${escapeHtml(formatDateTime(memory.savedAt || latest.createdAt))}</span>
-              <span>${escapeHtml(t("history.linkedLocations", { count: group.memories.length }, currentLanguage()))}</span>
-              <span>${escapeHtml(t("history.answerCount", { count: group.cards.length }, currentLanguage()))}</span>
-            </p>
-          </div>
-          <div class="actions">
-            <button class="button" type="button" data-action="copy-group">${escapeHtml(t("history.copy", currentLanguage()))}</button>
-            <button class="button" type="button" data-action="open-page">${escapeHtml(t("history.openSource", currentLanguage()))}</button>
-            ${group.cards.length > 1 ? `<button class="button" type="button" data-action="toggle-expand">${escapeHtml(isExpanded ? t("history.collapse", currentLanguage()) : t("history.expand", currentLanguage()))}</button>` : ""}
-            <span class="more-wrap">
-              <button class="button" type="button" data-action="toggle-more">${escapeHtml(t("history.more", currentLanguage()))}</button>
-              <span class="more-menu hidden">
-                <button class="button danger" type="button" data-action="delete-group">${escapeHtml(t("history.delete", currentLanguage()))}</button>
-              </span>
-            </span>
-          </div>
-        </header>
-        ${isExpanded ? renderCards(group.cards) : ""}
+        <button class="memory-toggle" type="button" data-action="toggle-expand" aria-expanded="${isExpanded}" aria-label="${escapeHtml(isExpanded ? t("history.collapse", currentLanguage()) : t("history.expand", currentLanguage()))}">
+          <span><strong class="term">${escapeHtml(group.term || "")}</strong><span class="summary-text">${escapeHtml(snippet(latest.response || t("history.noSummary", currentLanguage()), 260))}</span></span>
+          <span class="caret" aria-hidden="true">⌄</span>
+        </button>
+        <p class="meta"><span>${escapeHtml(memory.siteHost || t("history.unknownSite", currentLanguage()))}</span><span>${escapeHtml(formatDateTime(memory.savedAt || latest.createdAt))}</span><span>${escapeHtml(t("history.linkedLocations", { count: group.memories.length }, currentLanguage()))}</span><span>${escapeHtml(t("history.answerCount", { count: group.cards.length }, currentLanguage()))}</span></p>
+        ${isExpanded ? `<div class="memory-body">${renderCards(group.cards)}<div class="card-actions"><button class="button" type="button" data-action="copy-group">${escapeHtml(t("history.copy", currentLanguage()))}</button><button class="button" type="button" data-action="open-page">${escapeHtml(t("history.openSource", currentLanguage()))}</button><button class="button danger" type="button" data-action="delete-group">${escapeHtml(t("history.delete", currentLanguage()))}</button></div></div>` : ""}
       </article>
     `;
   }
@@ -239,11 +235,11 @@
           <article class="answer-card">
             <header>
               <h3>${escapeHtml(card.kind === "excerpt" ? t("history.excerptAnswer", currentLanguage()) : t("history.fullAnswer", currentLanguage()))}</h3>
-              <p class="meta">${escapeHtml(formatDateTime(card.createdAt || card.memory?.savedAt))}</p>
+              <p class="meta">${escapeHtml(formatDateTime(card.savedAt || card.createdAt || card.memory?.savedAt))}</p>
             </header>
-            <p>${escapeHtml(card.response || t("history.noAnswer", currentLanguage()))}</p>
+            <div class="answer-content">${renderStoredMarkdown(card.response || t("history.noAnswer", currentLanguage()))}</div>
             ${(card.followups || []).map((item) => `
-              <p><strong>${escapeHtml(item.query || t("history.followup", currentLanguage()))}</strong><br>${escapeHtml(item.response || "")}</p>
+              <section class="followup"><strong>${escapeHtml(item.query || t("history.followup", currentLanguage()))}</strong><div class="answer-content">${renderStoredMarkdown(item.response || "")}</div></section>
             `).join("")}
           </article>
         `).join("")}
@@ -263,9 +259,7 @@
     }
 
     const action = button.dataset.action;
-    if (action === "toggle-more") {
-      toggleMore(button);
-    } else if (action === "toggle-expand") {
+    if (action === "toggle-expand") {
       toggleSet(expandedTerms, group.key);
       render();
     } else if (action === "copy-group") {
@@ -320,19 +314,6 @@
       };
       chrome.tabs.onUpdated.addListener(listener);
     });
-  }
-
-  function toggleMore(button) {
-    const menu = button.closest(".more-wrap")?.querySelector(".more-menu");
-    if (!menu) {
-      return;
-    }
-    document.querySelectorAll(".more-menu").forEach((item) => {
-      if (item !== menu) {
-        item.classList.add("hidden");
-      }
-    });
-    menu.classList.toggle("hidden");
   }
 
   function toggleSet(set, key) {
@@ -428,5 +409,15 @@
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;")
       .replace(/'/g, "&#39;");
+  }
+
+  function renderStoredMarkdown(value) {
+    const escaped = escapeHtml(value);
+    return `<p>${escaped
+      .replace(/```([\s\S]*?)```/g, "<pre><code>$1</code></pre>")
+      .replace(/`([^`]+)`/g, "<code>$1</code>")
+      .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+      .replace(/\n{2,}/g, "</p><p>")
+      .replace(/\n/g, "<br>")}</p>`;
   }
 })();

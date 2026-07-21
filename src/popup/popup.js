@@ -7,6 +7,7 @@
     THEME_COLORS,
     mergeSettings,
     getThemePreset,
+    MODEL_PROVIDERS,
     ensureStorageSchema,
     getEffectiveLanguage,
     t,
@@ -22,16 +23,11 @@
     openOptions: document.getElementById("open-options"),
     openHistory: document.getElementById("open-history"),
     themePresets: document.getElementById("theme-presets"),
-    memoryCount: document.getElementById("memory-count"),
-    annotationCount: document.getElementById("annotation-count"),
     apiState: document.getElementById("api-state")
   };
 
   let activeTab = null;
   let settings = mergeSettings(DEFAULT_SETTINGS);
-  let memories = {};
-  let annotationBatches = {};
-  let activeAnnotationBatches = {};
 
   init().catch((error) => {
     setStatus(error.message || String(error), "error");
@@ -40,11 +36,8 @@
   async function init() {
     await ensureStorageSchema(chrome.storage.local);
     [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    const stored = await chrome.storage.local.get([STORAGE_KEYS.settings, STORAGE_KEYS.memories, STORAGE_KEYS.annotationBatches, STORAGE_KEYS.activeAnnotationBatches]);
+    const stored = await chrome.storage.local.get([STORAGE_KEYS.settings]);
     settings = mergeSettings(stored[STORAGE_KEYS.settings]);
-    memories = stored[STORAGE_KEYS.memories] || {};
-    annotationBatches = stored[STORAGE_KEYS.annotationBatches] || {};
-    activeAnnotationBatches = stored[STORAGE_KEYS.activeAnnotationBatches] || {};
 
     applyPageLanguage();
     renderColorPresets();
@@ -60,15 +53,12 @@
     const pageUrl = safeUrl(activeTab?.url);
     const language = currentLanguage();
     const host = pageUrl?.hostname || t("popup.nonWebPage", language);
-    const cards = Object.values(memories).reduce((sum, memory) => sum + (memory.cards || []).length, 0);
 
     els.host.textContent = host;
-    els.memoryCount.textContent = t("popup.memoryCount", { memories: Object.keys(memories).length, cards }, language);
-    const activeIds = new Set(Object.values(activeAnnotationBatches));
-    const activeItems = Array.from(activeIds).reduce((sum, id) => sum + (annotationBatches[id]?.items?.length || 0), 0);
-    const historyCount = Object.keys(annotationBatches).length;
-    els.annotationCount.textContent = t("popup.annotationCount", { history: historyCount, active: activeItems }, language);
-    els.apiState.textContent = settings.apiKey && settings.model ? t("popup.apiConfigured", language) : t("popup.apiMissing", language);
+    const provider = MODEL_PROVIDERS.find((item) => item.id === settings.provider);
+    els.apiState.textContent = settings.apiKey && settings.model
+      ? (provider ? (provider.labelKey ? t(provider.labelKey, language) : provider.label) : settings.model)
+      : t("popup.apiMissing", language);
     els.toggleHighlights.textContent = settings.hideReminders ? t("popup.showReminders", language) : t("popup.hideReminders", language);
     applyDocumentTheme(settings.highlightColor);
 

@@ -12,7 +12,7 @@
     schemaVersion: "inlineai_schema_version"
   };
 
-  const CURRENT_SCHEMA_VERSION = 3;
+  const CURRENT_SCHEMA_VERSION = 4;
 
   const MESSAGE_TYPES = {
     apiCall: "INLINEAI_API_CALL",
@@ -79,7 +79,7 @@
       "popup.hideReminders": "隐藏提醒",
       "popup.showReminders": "显示提醒",
       "popup.settings": "设置",
-      "popup.history": "全部历史解释",
+      "popup.history": "历史记录",
       "popup.themeColor": "主题色",
       "popup.themeColorAria": "快速选择主题色",
       "popup.nonWebPage": "非网页页面",
@@ -136,6 +136,7 @@
       "options.memoriesCleared": "已清空所有历史记忆。",
       "options.memoryCount": "已保存 {memories} 条记忆，{cards} 张回答卡。",
       "history.heading": "全部历史解释",
+      "history.title": "历史记录",
       "history.tabExplanations": "历史解释",
       "history.tabAnnotations": "历史批注",
       "history.annotationHeading": "历史批注",
@@ -262,6 +263,8 @@
       "content.selectAnswerFirst": "请先选中一段回答。",
       "content.excerptSaved": "已保存节选。",
       "content.savedToHistory": "已保存到历史。",
+      "content.unsave": "取消收藏",
+      "content.unsavedFromHistory": "已取消收藏。",
       "content.deleteCardConfirm": "删除“{term}”的这条回答？",
       "content.recordDeleted": "这条保存记录已经删除。",
       "content.threadQuestion": "问题：{query}",
@@ -333,7 +336,7 @@
       "popup.hideReminders": "Hide reminders",
       "popup.showReminders": "Show reminders",
       "popup.settings": "Settings",
-      "popup.history": "All history",
+      "popup.history": "History",
       "popup.themeColor": "Theme color",
       "popup.themeColorAria": "Choose a theme color",
       "popup.nonWebPage": "Non-web page",
@@ -390,6 +393,7 @@
       "options.memoriesCleared": "All history memories have been cleared.",
       "options.memoryCount": "Saved {memories} memories and {cards} answer cards.",
       "history.heading": "All History",
+      "history.title": "History",
       "history.tabExplanations": "Explanation history",
       "history.tabAnnotations": "Annotation history",
       "history.annotationHeading": "Annotation history",
@@ -516,6 +520,8 @@
       "content.selectAnswerFirst": "Select part of an answer first.",
       "content.excerptSaved": "Excerpt saved.",
       "content.savedToHistory": "Saved to history.",
+      "content.unsave": "Remove from history",
+      "content.unsavedFromHistory": "Removed from history.",
       "content.deleteCardConfirm": "Delete this saved answer for \"{term}\"?",
       "content.recordDeleted": "This saved record has been deleted.",
       "content.threadQuestion": "Question: {query}",
@@ -692,6 +698,73 @@
     };
   }
 
+  function normalizeMemoryCards(memories) {
+    if (!memories || typeof memories !== "object" || Array.isArray(memories)) {
+      return {};
+    }
+
+    return Object.fromEntries(Object.entries(memories).map(([memoryId, memory]) => {
+      if (!memory || typeof memory !== "object" || !Array.isArray(memory.cards)) {
+        return [memoryId, memory];
+      }
+
+      const usedCardIds = new Set();
+      const cards = [];
+      memory.cards.forEach((card, cardIndex) => {
+        if (!card || typeof card !== "object") {
+          return;
+        }
+        const rootSourceMessageId = String(card.sourceMessageId || card.id || `legacy-root-${cardIndex}`);
+        const rootCardId = uniqueMemoryCardId(String(card.id || rootSourceMessageId), usedCardIds, `legacy-card-${cardIndex}`);
+        const root = {
+          ...card,
+          id: rootCardId,
+          sourceMessageId: rootSourceMessageId,
+          threadId: String(card.threadId || rootSourceMessageId),
+          parentMessageId: card.parentMessageId || "",
+          savedAt: card.savedAt || card.createdAt || memory.savedAt || 0
+        };
+        delete root.followups;
+        cards.push(root);
+
+        (Array.isArray(card.followups) ? card.followups : []).forEach((followup, followupIndex) => {
+          if (!followup || typeof followup !== "object") {
+            return;
+          }
+          const sourceMessageId = String(followup.sourceMessageId || followup.id || `${rootSourceMessageId}-followup-${followupIndex}`);
+          const id = uniqueMemoryCardId(String(followup.id || sourceMessageId), usedCardIds, `${rootCardId}-followup-${followupIndex}`);
+          cards.push({
+            id,
+            sourceMessageId,
+            threadId: root.threadId,
+            parentMessageId: rootSourceMessageId,
+            query: followup.query || "",
+            queryKind: followup.queryKind || "custom",
+            response: followup.response || "",
+            kind: followup.kind || "full",
+            createdAt: followup.createdAt || root.createdAt || 0,
+            savedAt: followup.savedAt || root.savedAt || root.createdAt || 0,
+            synced: true
+          });
+        });
+      });
+
+      return [memoryId, { ...memory, cards }];
+    }));
+  }
+
+  function uniqueMemoryCardId(candidate, usedIds, fallback) {
+    const base = candidate || fallback;
+    let id = base;
+    let suffix = 2;
+    while (usedIds.has(id)) {
+      id = `${base}-${suffix}`;
+      suffix += 1;
+    }
+    usedIds.add(id);
+    return id;
+  }
+
   async function ensureStorageSchema(storageArea) {
     const area = storageArea || global.chrome?.storage?.local;
     if (!area) {
@@ -703,19 +776,31 @@
       STORAGE_KEYS.settings,
       STORAGE_KEYS.memories,
       STORAGE_KEYS.annotationBatches,
-      STORAGE_KEYS.activeAnnotationBatches
+      STORAGE_KEYS.activeAnnotationBatches,
+      STORAGE_KEYS.terms,
+      STORAGE_KEYS.answers
     ]);
     const patch = {};
     const normalizedSettings = mergeSettings(stored[STORAGE_KEYS.settings]);
     if (stored[STORAGE_KEYS.settings] && JSON.stringify(normalizedSettings) !== JSON.stringify(stored[STORAGE_KEYS.settings])) {
       patch[STORAGE_KEYS.settings] = normalizedSettings;
     }
-    if (!stored[STORAGE_KEYS.memories] || typeof stored[STORAGE_KEYS.memories] !== "object") patch[STORAGE_KEYS.memories] = {};
+    if (!stored[STORAGE_KEYS.memories] || typeof stored[STORAGE_KEYS.memories] !== "object") {
+      patch[STORAGE_KEYS.memories] = {};
+    } else {
+      const normalizedMemories = normalizeMemoryCards(stored[STORAGE_KEYS.memories]);
+      if (JSON.stringify(normalizedMemories) !== JSON.stringify(stored[STORAGE_KEYS.memories])) {
+        patch[STORAGE_KEYS.memories] = normalizedMemories;
+      }
+    }
     if (!stored[STORAGE_KEYS.annotationBatches] || typeof stored[STORAGE_KEYS.annotationBatches] !== "object") patch[STORAGE_KEYS.annotationBatches] = {};
     if (!stored[STORAGE_KEYS.activeAnnotationBatches] || typeof stored[STORAGE_KEYS.activeAnnotationBatches] !== "object") patch[STORAGE_KEYS.activeAnnotationBatches] = {};
     if (stored[STORAGE_KEYS.schemaVersion] !== CURRENT_SCHEMA_VERSION) patch[STORAGE_KEYS.schemaVersion] = CURRENT_SCHEMA_VERSION;
     if (Object.keys(patch).length) await area.set(patch);
-    await area.remove([STORAGE_KEYS.terms, STORAGE_KEYS.answers]);
+    if (stored[STORAGE_KEYS.schemaVersion] !== CURRENT_SCHEMA_VERSION ||
+        stored[STORAGE_KEYS.terms] !== undefined || stored[STORAGE_KEYS.answers] !== undefined) {
+      await area.remove([STORAGE_KEYS.terms, STORAGE_KEYS.answers]);
+    }
   }
 
   function migrateLegacyHighlightStyle(style) {
@@ -879,6 +964,7 @@
     LIMITS,
     normalizeTerm,
     mergeSettings,
+    normalizeMemoryCards,
     getThemePreset,
     ensureStorageSchema,
     resolveLanguage,

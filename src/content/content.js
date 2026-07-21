@@ -6,8 +6,10 @@
   const C = globalThis.InlineAIConstants;
   const A = globalThis.InlineAIAnnotations;
   const AR = globalThis.InlineAIAnnotationRuntime;
+  const P = globalThis.InlineAIContentPerformance;
+  const L = globalThis.InlineAIPanelLayout;
   const UI = globalThis.InlineAIContentUi;
-  if (!C || !A || !AR || !UI) {
+  if (!C || !A || !AR || !P || !L || !UI) {
     console.warn("[这是啥来着] Missing shared constants.");
     return;
   }
@@ -21,8 +23,8 @@
     PORTS,
     LIMITS,
     mergeSettings,
+    normalizeMemoryCards,
     getThemePreset,
-    ensureStorageSchema,
     getEffectiveLanguage,
     t,
     isDefaultPromptQuestion
@@ -42,6 +44,7 @@
   let shadow = null;
   let bubble = null;
   let panel = null;
+  let panelLayer = null;
   let interactionStack = null;
   let answerSurface = null;
   let composerSurface = null;
@@ -58,7 +61,9 @@
   let selectionState = null;
   let panelState = null;
   let activePort = null;
-  let highlightTimer = null;
+  let activePanelId = "";
+  let panelZIndex = 10;
+  const interactionPanels = new Map();
   let hoverHintTimer = null;
   let hoverHintHideTimer = null;
   let hoverHintState = null;
@@ -67,7 +72,7 @@
   let resizeState = null;
   let suppressPanelHeaderClick = false;
   let suppressOutsideCloseUntil = 0;
-  let pinnedPanelCounter = 0;
+  let annotationPanelState = { collapsed: false, editingAnnotationId: "" };
   let annotationBatches = {};
   let activeAnnotationBatches = {};
   let activeAnnotationBatch = null;
@@ -78,7 +83,10 @@
   let editorDropTarget = null;
   let annotationBasketTimer = null;
   let annotationBasketCompactTimer = null;
+  let annotationBasketExpandedUntil = 0;
+  let lastLocalAnnotationWrite = null;
   let annotationFrame = 0;
+  let annotationMutationTimer = null;
   let annotationObserver = null;
   let annotationResizeObserver = null;
   let annotationInteraction = null;
@@ -88,6 +96,15 @@
   let annotationPasteListenersBound = false;
   let lastKnownHref = location.href;
   let pendingPasteSignal = null;
+  let memoryIndex = { candidates: [], hasCandidates: false };
+  let hoverListenerBound = false;
+  let dragMoveBound = false;
+  let annotationReloadTimer = null;
+  let fullUiReady = false;
+  const hoverThrottle = P.createLatestThrottle({
+    delay: 110,
+    callback: (point) => updateHistoryHint(point)
+  });
 
   init().catch((error) => {
     console.warn("[这是啥来着] Init failed:", error);
@@ -95,15 +112,15 @@
   });
 
   async function init() {
-    await ensureStorageSchema(chrome.storage.local);
     const stored = await chrome.storage.local.get([
       STORAGE_KEYS.settings, STORAGE_KEYS.memories,
       STORAGE_KEYS.annotationBatches, STORAGE_KEYS.activeAnnotationBatches
     ]);
     settings = mergeSettings(stored[STORAGE_KEYS.settings]);
-    memories = stored[STORAGE_KEYS.memories] || {};
+    memories = normalizeMemoryCards(stored[STORAGE_KEYS.memories] || {});
     annotationBatches = stored[STORAGE_KEYS.annotationBatches] || {};
     activeAnnotationBatches = stored[STORAGE_KEYS.activeAnnotationBatches] || {};
+    rebuildMemoryIndex();
 
     globalThis.__INLINEAI_CONTENT_LOADED__ = true;
     globalThis.__INLINEAI_CONTENT_LOADING__ = false;
@@ -112,11 +129,43 @@
     injectMemoryStyle();
     bindEvents();
     chrome.runtime.sendMessage({ type: MESSAGE_TYPES.openOnboarding }).catch(() => {});
-    scheduleHighlight();
     await loadActiveAnnotationBatch();
   }
 
   function createShadowUi() {
+    host = document.getElementById(ROOT_ID);
+    if (!host) {
+      host = document.createElement("div");
+      host.id = ROOT_ID;
+      host.style.cssText = "position:fixed;inset:0;z-index:2147483647;pointer-events:none;";
+      document.documentElement.appendChild(host);
+    }
+    shadow = host.shadowRoot || host.attachShadow({ mode: "open" });
+    shadow.innerHTML = `
+      <style>
+        :host { --iai-accent: #2563eb; --iai-accent-rgb: 37, 99, 235; font-family: ui-sans-serif, system-ui, sans-serif; }
+        .hidden { display: none !important; }
+        #bubble { position:fixed; width:16px; height:16px; border:2px solid rgba(255,253,247,.92); border-radius:50%; background:var(--iai-accent); color:transparent; cursor:pointer; box-shadow:0 0 0 5px rgba(var(--iai-accent-rgb),.16),0 8px 18px rgba(61,50,42,.22); pointer-events:auto; }
+        #toast { position:fixed; right:16px; bottom:16px; max-width:min(360px,calc(100vw - 32px)); padding:10px 12px; border-radius:10px; background:#1f2937; color:#fff; pointer-events:auto; }
+      </style>
+      <button id="bubble" class="hidden" type="button" title="${escapeHtml(t("content.bubbleTitle", currentLanguage()))}" aria-label="${escapeHtml(t("content.bubbleTitle", currentLanguage()))}"></button>
+      <div id="toast" class="hidden"></div>
+    `;
+    bubble = shadow.getElementById("bubble");
+    toast = shadow.getElementById("toast");
+    applyThemeVars();
+    updateLocalizedShellLabels();
+  }
+
+  function ensureFullUi() {
+    if (fullUiReady) return;
+    const bubbleState = bubble && {
+      hidden: bubble.classList.contains("hidden"),
+      left: bubble.style.left,
+      top: bubble.style.top,
+      title: bubble.title,
+      label: bubble.getAttribute("aria-label")
+    };
     host = document.getElementById(ROOT_ID);
     if (!host) {
       host = document.createElement("div");
@@ -364,8 +413,8 @@
         .round-action.annotate:hover { background: var(--iai-accent-soft); }
         .round-action.send:hover { background: var(--iai-accent-strong); }
         .round-action:active { transform: scale(0.97); }
-        .round-action:disabled,
-        .input-shell textarea:disabled { cursor: default; opacity: 0.45; }
+        .round-action:disabled { cursor: wait; }
+        .input-shell textarea[readonly] { cursor: default; }
         .action-icon {
           width: 18px;
           height: 18px;
@@ -390,7 +439,7 @@
           width: 100%;
           max-height: min(520px, calc(100vh - 108px));
           margin-top: 12px;
-          padding: 1px;
+          padding: 0;
           overflow: auto;
         }
         .response-card {
@@ -404,12 +453,12 @@
           border-radius: var(--card-radius);
           padding: 18px 34px 22px 20px;
           background: var(--iai-interaction-paper);
-          box-shadow: 0 12px 30px rgba(43, 35, 29, 0.075);
+          box-shadow: 0 2px 10px rgba(43, 35, 29, 0.035);
           animation: response-card-in 180ms ease-out;
         }
         @keyframes response-card-in {
-          from { opacity: 0; transform: translateY(6px); }
-          to { opacity: 1; transform: translateY(0); }
+          from { transform: translateY(6px); }
+          to { transform: translateY(0); }
         }
         .response-meta { display: block; margin-bottom: 10px; color: var(--iai-accent-strong); }
         .response-question {
@@ -450,7 +499,8 @@
         .response-close:focus-visible,
         .response-favourite:hover,
         .response-favourite:focus-visible { outline: none; color: var(--iai-accent-strong); transform: scale(1.08); }
-        .response-favourite.active { color: var(--iai-accent); cursor: default; }
+        .response-favourite.active { color: var(--iai-accent); }
+        .response-favourite:disabled { cursor: wait; }
         .save-icon { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; }
         .response-body { min-height: 28px; color: var(--iai-interaction-ink); font: 14px/1.68 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; }
         .response-card .response { border: 0; padding: 0; background: transparent; color: inherit; font: inherit; }
@@ -466,10 +516,9 @@
           animation: response-caret 800ms steps(1, end) infinite;
         }
         @keyframes response-caret { 50% { opacity: 0; } }
-        .interaction-stack.answer-collapsed > :not(#thread-header) { display: none !important; }
+        .interaction-stack.answer-collapsed > :not(.thread-header) { display: none !important; }
         .interaction-stack.answer-collapsed .thread-header { margin-bottom: 0; }
         .interaction-stack.answer-collapsed .quote-chip-toggle-icon { transform: rotate(180deg); }
-        .pinned-response-card { position: fixed; z-index: 4; max-height: calc(100vh - 24px); overflow: auto; pointer-events: auto; }
         .surface.collapsed {
           width: auto !important;
           min-width: 150px;
@@ -910,31 +959,147 @@
       <div id="annotation-highlight-layer" aria-hidden="true"></div>
       <div id="editor-drop-target" class="hidden" aria-hidden="true"><span></span></div>
       <button id="annotation-basket" class="hidden" draggable="true" type="button" data-action="open-annotation-basket" aria-live="polite"></button>
-      ${UI.interactionShell(t("app.dialogLabel", currentLanguage()))}
+      <div id="interaction-layer" aria-live="off"></div>
       <section id="panel" class="surface hidden" role="dialog" aria-modal="false" aria-label="${escapeHtml(t("app.dialogLabel", currentLanguage()))}"></section>
       <div id="toast" class="hidden"></div>
     `;
 
     bubble = shadow.getElementById("bubble");
     panel = shadow.getElementById("panel");
-    interactionStack = shadow.getElementById("interaction-stack");
-    answerSurface = shadow.getElementById("answer-surface");
-    composerSurface = shadow.getElementById("composer-surface");
-    threadHeader = shadow.getElementById("thread-header");
-    quoteChip = shadow.getElementById("quote-chip");
-    collapsedThreadClose = shadow.getElementById("collapsed-thread-close");
-    inputRow = shadow.getElementById("input-row");
-    annotationActionSurface = shadow.getElementById("annotation-action-surface");
-    sendActionSurface = shadow.getElementById("send-action-surface");
-    composerError = shadow.getElementById("inlineai-error");
+    panelLayer = shadow.getElementById("interaction-layer");
+    interactionStack = null;
+    answerSurface = null;
+    composerSurface = null;
+    threadHeader = null;
+    quoteChip = null;
+    collapsedThreadClose = null;
+    inputRow = null;
+    annotationActionSurface = null;
+    sendActionSurface = null;
+    composerError = null;
     toast = shadow.getElementById("toast");
     historyHint = shadow.getElementById("history-hint");
     historyHintLine = shadow.getElementById("history-hint-line");
     annotationBasket = shadow.getElementById("annotation-basket");
     annotationHighlightLayer = shadow.getElementById("annotation-highlight-layer");
     editorDropTarget = shadow.getElementById("editor-drop-target");
+    fullUiReady = true;
+    if (bubbleState) {
+      bubble.classList.toggle("hidden", bubbleState.hidden);
+      bubble.style.left = bubbleState.left;
+      bubble.style.top = bubbleState.top;
+      bubble.title = bubbleState.title;
+      bubble.setAttribute("aria-label", bubbleState.label || "");
+    }
+    bindFullUiEvents();
     applyThemeVars();
     updateLocalizedShellLabels();
+  }
+
+  function createInteractionPanel(state) {
+    ensureFullUi();
+    const id = createId("panel");
+    const template = document.createElement("template");
+    template.innerHTML = UI.interactionShell(t("app.dialogLabel", currentLanguage()), { instanceId: id });
+    const root = template.content.firstElementChild;
+    panelLayer.appendChild(root);
+    const instance = {
+      id,
+      state: { ...state, instanceId: id },
+      root,
+      port: null,
+      threadHeader: root.querySelector('[data-part="thread-header"]'),
+      quoteChip: root.querySelector('[data-part="quote-chip"]'),
+      collapsedThreadClose: root.querySelector('[data-part="collapsed-thread-close"]'),
+      inputRow: root.querySelector('[data-part="input-row"]'),
+      composerSurface: root.querySelector('[data-part="composer-surface"]'),
+      annotationActionSurface: root.querySelector('[data-part="annotation-action-surface"]'),
+      sendActionSurface: root.querySelector('[data-part="send-action-surface"]'),
+      composerError: root.querySelector('[data-part="composer-error"]'),
+      answerSurface: root.querySelector('[data-part="answer-surface"]')
+    };
+    interactionPanels.set(id, instance);
+    activateInteractionPanel(instance);
+    return instance;
+  }
+
+  function getInteractionPanel(value = activePanelId) {
+    if (!value) return null;
+    return typeof value === "string" ? interactionPanels.get(value) || null : value;
+  }
+
+  function activateInteractionPanel(value, { raise = true } = {}) {
+    const instance = getInteractionPanel(value);
+    if (!instance) return null;
+    activePanelId = instance.id;
+    interactionStack = instance.root;
+    panelState = instance.state;
+    activePort = instance.port;
+    answerSurface = instance.answerSurface;
+    composerSurface = instance.composerSurface;
+    threadHeader = instance.threadHeader;
+    quoteChip = instance.quoteChip;
+    collapsedThreadClose = instance.collapsedThreadClose;
+    inputRow = instance.inputRow;
+    annotationActionSurface = instance.annotationActionSurface;
+    sendActionSurface = instance.sendActionSurface;
+    composerError = instance.composerError;
+    if (raise) {
+      instance.root.style.zIndex = String(++panelZIndex);
+    }
+    return instance;
+  }
+
+  function interactionPanelForElement(element) {
+    const root = element?.closest?.(".interaction-stack[data-instance-id]");
+    return root ? getInteractionPanel(root.dataset.instanceId) : null;
+  }
+
+  function visibleInteractionPanels(exceptId = "") {
+    return Array.from(interactionPanels.values()).filter((instance) =>
+      instance.id !== exceptId && instance.root.isConnected && !instance.root.classList.contains("hidden")
+    );
+  }
+
+  function closeInteractionPanel(value = activePanelId) {
+    const instance = getInteractionPanel(value);
+    if (!instance) return;
+    try {
+      instance.port?.disconnect();
+    } catch (_) {
+      // A completed stream can already have disconnected its port.
+    }
+    interactionPanels.delete(instance.id);
+    instance.root.remove();
+    if (activePanelId === instance.id) {
+      const next = Array.from(interactionPanels.values()).sort((left, right) =>
+        Number(right.root.style.zIndex || 0) - Number(left.root.style.zIndex || 0)
+      )[0] || null;
+      if (next) {
+        activateInteractionPanel(next, { raise: false });
+      } else {
+        activePanelId = "";
+        interactionStack = null;
+        panelState = null;
+        activePort = null;
+        answerSurface = null;
+        composerSurface = null;
+        threadHeader = null;
+        quoteChip = null;
+        collapsedThreadClose = null;
+        inputRow = null;
+        annotationActionSurface = null;
+        sendActionSurface = null;
+        composerError = null;
+      }
+    }
+  }
+
+  function closeTopInteractionPanel() {
+    const top = Array.from(interactionPanels.values()).sort((left, right) =>
+      Number(right.root.style.zIndex || 0) - Number(left.root.style.zIndex || 0)
+    )[0];
+    if (top) closeInteractionPanel(top);
   }
 
   function bindEvents() {
@@ -949,7 +1114,6 @@
     });
     document.addEventListener("click", handleDocumentClick, true);
     document.addEventListener("keydown", handleDocumentKeydown, true);
-    document.addEventListener("mousemove", handleDragMove, true);
     document.addEventListener("mouseup", handleDragEnd, true);
     window.addEventListener("popstate", checkAnnotationPageChange);
     window.addEventListener("hashchange", checkAnnotationPageChange);
@@ -958,21 +1122,9 @@
     window.setInterval(() => {
       if (!document.hidden && location.href !== lastKnownHref) checkAnnotationPageChange();
     }, 1000);
-    shadow.addEventListener("click", handleShadowClick);
-    shadow.addEventListener("keydown", handleShadowKeydown);
-    shadow.addEventListener("input", handleShadowInput);
-    shadow.addEventListener("mousedown", handleDragStart);
-    shadow.addEventListener("mouseup", updateSelectionActions);
-    shadow.addEventListener("keyup", updateSelectionActions);
-    shadow.addEventListener("focusout", handleShadowFocusOut);
-    bubble.addEventListener("pointerdown", handleBubblePointerDown);
-    bubble.addEventListener("pointerup", handleBubblePointerUp);
-    bubble.addEventListener("pointerleave", cancelBubblePress);
-    bubble.addEventListener("pointercancel", cancelBubblePress);
-    annotationBasket.addEventListener("dragstart", handleAnnotationBasketDragStart);
-    annotationBasket.addEventListener("dragend", endAnnotationDrag);
-
+    bindBubbleEvents();
     chrome.storage.onChanged.addListener(handleStorageChange);
+    syncHoverListener();
     chrome.runtime.onMessage.addListener((message) => {
       if (message?.type === MESSAGE_TYPES.showReady) {
         showToast(t("content.readyToast", currentLanguage()));
@@ -990,6 +1142,26 @@
         }
       }
     });
+  }
+
+  function bindFullUiEvents() {
+    bindBubbleEvents();
+    shadow.addEventListener("click", handleShadowClick);
+    shadow.addEventListener("keydown", handleShadowKeydown);
+    shadow.addEventListener("input", handleShadowInput);
+    shadow.addEventListener("mousedown", handleDragStart);
+    shadow.addEventListener("mouseup", updateSelectionActions);
+    shadow.addEventListener("keyup", updateSelectionActions);
+    shadow.addEventListener("focusout", handleShadowFocusOut);
+    annotationBasket.addEventListener("dragstart", handleAnnotationBasketDragStart);
+    annotationBasket.addEventListener("dragend", endAnnotationDrag);
+  }
+
+  function bindBubbleEvents() {
+    bubble.addEventListener("pointerdown", handleBubblePointerDown);
+    bubble.addEventListener("pointerup", handleBubblePointerUp);
+    bubble.addEventListener("pointerleave", cancelBubblePress);
+    bubble.addEventListener("pointercancel", cancelBubblePress);
   }
 
   function stopInlineAiInputLeak(event) {
@@ -1014,20 +1186,33 @@
       applyThemeVars();
       updateLocalizedShellLabels();
       injectMemoryStyle();
-      scheduleHighlight();
     }
 
     if (changes[STORAGE_KEYS.memories]) {
-      memories = changes[STORAGE_KEYS.memories].newValue || {};
-      scheduleHighlight();
+      memories = normalizeMemoryCards(changes[STORAGE_KEYS.memories].newValue || {});
+    }
+    if (changes[STORAGE_KEYS.settings] || changes[STORAGE_KEYS.memories]) {
+      rebuildMemoryIndex();
+      syncHoverListener();
     }
     if (changes[STORAGE_KEYS.annotationBatches]) {
       annotationBatches = changes[STORAGE_KEYS.annotationBatches].newValue || {};
-      void loadActiveAnnotationBatch();
     }
     if (changes[STORAGE_KEYS.activeAnnotationBatches]) {
       activeAnnotationBatches = changes[STORAGE_KEYS.activeAnnotationBatches].newValue || {};
-      void loadActiveAnnotationBatch();
+    }
+    if (changes[STORAGE_KEYS.annotationBatches] || changes[STORAGE_KEYS.activeAnnotationBatches]) {
+      const localWrite = lastLocalAnnotationWrite;
+      const isOwnActiveWrite = Boolean(
+        localWrite &&
+        annotationBatches[localWrite.id]?.updatedAt === localWrite.updatedAt &&
+        activeAnnotationBatches[localWrite.pageKey] === localWrite.id
+      );
+      if (isOwnActiveWrite) {
+        lastLocalAnnotationWrite = null;
+      } else {
+        scheduleActiveAnnotationReload();
+      }
     }
   }
 
@@ -1095,15 +1280,6 @@
           return;
         }
       }
-      if (UI.shouldCloseInteraction({
-        open: Boolean(interactionStack && !interactionStack.classList.contains("hidden")),
-        mode: panelState?.mode,
-        inside: isInlineAiComposedEvent(event),
-        now: Date.now(),
-        suppressUntil: suppressOutsideCloseUntil
-      })) {
-        closePanel();
-      }
       return;
     }
 
@@ -1114,10 +1290,20 @@
 
   function handleDocumentKeydown(event) {
     if (event.key === "Escape") {
-      if (panelIsOpen()) {
-        closePanel();
+      const path = event.composedPath?.() || [];
+      const focusedRoot = path.find((node) => node?.classList?.contains?.("interaction-stack"));
+      if (panel && path.includes(panel)) {
+        closeAnnotationPanel();
+      } else if (focusedRoot) {
+        closeInteractionPanel(focusedRoot.dataset.instanceId);
+      } else if (interactionPanels.size) {
+        closeTopInteractionPanel();
+      } else if (panel && !panel.classList.contains("hidden")) {
+        closeAnnotationPanel();
       }
       hideBubble();
+      event.preventDefault();
+      event.stopPropagation();
       return;
     }
 
@@ -1129,6 +1315,10 @@
   }
 
   function handleShadowClick(event) {
+    const instance = interactionPanelForElement(event.target);
+    if (instance) {
+      activateInteractionPanel(instance);
+    }
     const button = event.target?.closest?.("[data-action]");
     const action = button?.dataset.action;
 
@@ -1144,35 +1334,36 @@
       return;
     }
 
-    if (action === "close-pinned") {
-      closePinnedPanel(button);
-    } else if (action === "close") {
-      closePanel();
+    if (action === "close") {
+      if (instance) closeInteractionPanel(instance);
+      else closePanel();
     } else if (action === "send-new") {
-      sendQuestion({ followup: false });
+      sendQuestion({ followup: false, instance });
     } else if (action === "send-followup") {
-      sendQuestion({ followup: true });
+      sendQuestion({ followup: true, instance });
     } else if (action === "toggle-answer-collapse") {
       if (suppressPanelHeaderClick) {
         suppressPanelHeaderClick = false;
         return;
       }
       const selection = shadow.getSelection?.() || document.getSelection();
-      if (!selection || selection.isCollapsed) {
-        toggleInteractionCollapse();
+      if ((!selection || selection.isCollapsed) && !panelState?.streaming) {
+        toggleInteractionCollapse(instance);
       }
     } else if (action === "show-followup") {
       selectCardFromButton(button);
-      renderFollowupPanel();
+      renderFollowupPanel(instance);
     } else if (action === "save-answer") {
-      saveCurrentAnswer({ kind: "full" });
+      saveCurrentAnswer({ kind: "full", messageId: button.dataset.messageId, instance });
+    } else if (action === "unsave-answer") {
+      unsaveAnswer(button.dataset.memoryId, button.dataset.cardId, instance);
     } else if (action === "save-excerpt") {
-      saveCurrentAnswer({ kind: "excerpt" });
+      saveCurrentAnswer({ kind: "excerpt", messageId: button.dataset.messageId, instance });
     } else if (action === "retry-request") {
-      retryLastRequest();
+      retryLastRequest(instance);
     } else if (action === "delete-card") {
       selectCardFromButton(button);
-      deleteMemoryCard(button.dataset.memoryId, button.dataset.cardId);
+      deleteMemoryCard(button.dataset.memoryId, button.dataset.cardId, instance);
     } else if (action === "open-hover-memory") {
       openHoverMemory();
     } else if (action === "save-annotation") {
@@ -1186,14 +1377,16 @@
     } else if (action === "copy-annotation-batch") {
       copyAnnotationBatchManually();
     } else if (action === "close-annotation-panel") {
-      closePanel();
+      closeAnnotationPanel();
     }
   }
 
   function handleShadowKeydown(event) {
     if (event.key === "Escape") {
       event.preventDefault();
-      closePanel();
+      if (event.target?.closest?.("#panel")) closeAnnotationPanel();
+      else if (interactionPanels.size) closeTopInteractionPanel();
+      else closeAnnotationPanel();
       return;
     }
 
@@ -1207,13 +1400,14 @@
 
     if (event.key === "Enter" && !event.shiftKey && !event.isComposing && event.keyCode !== 229 && event.target?.matches?.("textarea")) {
       event.preventDefault();
-      sendQuestion({ followup: Boolean(panelState?.currentCard) });
+      const instance = interactionPanelForElement(event.target);
+      sendQuestion({ followup: Boolean(instance?.state.currentCard), instance });
     }
   }
 
   function handleShadowFocusOut(event) {
     const editor = event.target?.matches?.(".annotation-edit-area") ? event.target : null;
-    if (editor && panelState?.editingAnnotationId === editor.dataset.annotationEdit) {
+    if (editor && annotationPanelState.editingAnnotationId === editor.dataset.annotationEdit) {
       saveAnnotationEdit(editor.dataset.annotationEdit, { rerender: false });
     }
   }
@@ -1225,6 +1419,8 @@
   }
 
   function handleDragStart(event) {
+    const panelInstance = interactionPanelForElement(event.target);
+    if (panelInstance) activateInteractionPanel(panelInstance);
     const resizeHandle = event.target?.closest?.(".resize-handle");
     if (resizeHandle) {
       const surface = resizeHandle.closest(".surface, .answer-surface");
@@ -1242,12 +1438,13 @@
         width: rect.width,
         height: heightRect.height
       };
+      bindDragMove();
       event.preventDefault();
       return;
     }
 
-    const header = event.target?.closest?.(".surface-header, #quote-chip");
-    if (!header || (event.target?.closest?.("button,select") && !event.target?.closest?.("#quote-chip"))) {
+    const header = event.target?.closest?.(".surface-header, .quote-chip");
+    if (!header || (event.target?.closest?.("button,select") && !event.target?.closest?.(".quote-chip"))) {
       return;
     }
 
@@ -1262,6 +1459,7 @@
       top: rect.top,
       moved: false
     };
+    bindDragMove();
     event.preventDefault();
   }
 
@@ -1272,10 +1470,7 @@
       return;
     }
 
-    if (!dragState) {
-      scheduleHistoryHint(event);
-      return;
-    }
+    if (!dragState) return;
 
     hideHistoryHint();
     const deltaX = event.clientX - dragState.startX;
@@ -1294,6 +1489,7 @@
     const moved = Boolean(dragState?.moved);
     dragState = null;
     resizeState = null;
+    unbindDragMove();
     if (moved) {
       suppressPanelHeaderClick = true;
       window.setTimeout(() => {
@@ -1395,15 +1591,14 @@
       return;
     }
 
-    pinCurrentPanelSnapshot();
-    prepareTemporaryPanelState();
+    const instance = prepareTemporaryPanelState();
     hideBubble();
     panelState.pendingQueryKind = "default";
     panelState.pendingQuery = defaultQuestionFor(panelState.term);
     renderAnswerPanel({ loading: true });
-    showPanel(selectionState.rect);
+    showPanel(selectionState.rect, instance);
     window.setTimeout(() => {
-      sendQuestion({ questionOverride: panelState.pendingQuery, followup: false, queryKind: "default" });
+      sendQuestion({ questionOverride: instance.state.pendingQuery, followup: false, queryKind: "default", instance });
     }, 30);
   }
 
@@ -1412,27 +1607,58 @@
       return;
     }
 
-    pinCurrentPanelSnapshot();
-    prepareTemporaryPanelState();
+    const instance = prepareTemporaryPanelState();
     hideBubble();
     suppressOutsideCloseUntil = Date.now() + 350;
     renderQuestionPanel();
-    showPanel(anchorRect || selectionState.rect);
+    showPanel(anchorRect || selectionState.rect, instance);
   }
 
   function scheduleHistoryHint(event) {
     if (isInsideInlineAi(event.target)) {
       window.clearTimeout(hoverHintHideTimer);
+      hoverThrottle.cancel();
       return;
     }
 
-    window.clearTimeout(hoverHintTimer);
     const point = { x: event.clientX, y: event.clientY, target: event.target };
-    hoverHintTimer = window.setTimeout(() => updateHistoryHint(point), 110);
+    hoverThrottle.push(point);
+  }
+
+  function handleHoverMove(event) {
+    if (dragState || resizeState) return;
+    scheduleHistoryHint(event);
+  }
+
+  function syncHoverListener() {
+    const enabled = !settings.hideReminders && memoryIndex.hasCandidates;
+    if (enabled && !hoverListenerBound) {
+      document.addEventListener("mousemove", handleHoverMove, true);
+      hoverListenerBound = true;
+      return;
+    }
+    if (!enabled && hoverListenerBound) {
+      document.removeEventListener("mousemove", handleHoverMove, true);
+      hoverListenerBound = false;
+      hoverThrottle.cancel();
+      hideHistoryHint();
+    }
+  }
+
+  function bindDragMove() {
+    if (dragMoveBound) return;
+    document.addEventListener("mousemove", handleDragMove, true);
+    dragMoveBound = true;
+  }
+
+  function unbindDragMove() {
+    if (!dragMoveBound) return;
+    document.removeEventListener("mousemove", handleDragMove, true);
+    dragMoveBound = false;
   }
 
   function updateHistoryHint(point) {
-    if (settings.hideReminders || !point || panelIsOpen() || isInsideEditable(point.target)) {
+    if (settings.hideReminders || !point || !canShowHistoryHint() || isInsideEditable(point.target)) {
       hideHistoryHint();
       return;
     }
@@ -1484,10 +1710,7 @@
       return null;
     }
 
-    const groups = groupApplicableMemoriesByTerm();
-    const candidates = Object.values(groups)
-      .filter((group) => group.term)
-      .sort((a, b) => b.term.length - a.term.length);
+    const candidates = memoryIndex.candidates;
     if (!candidates.length) {
       return null;
     }
@@ -1520,24 +1743,8 @@
     return null;
   }
 
-  function groupApplicableMemoriesByTerm() {
-    return applicableMemories()
-      .filter(hasSyncedCards)
-      .reduce((groups, memory) => {
-        const key = memory.termKey || termKeyFor(memory.term);
-        if (!groups[key]) {
-          groups[key] = {
-            term: memory.term || "",
-            termKey: key,
-            memories: []
-          };
-        }
-        groups[key].memories.push(memory);
-        return groups;
-      }, {});
-  }
-
   function showHistoryHint(match) {
+    ensureFullUi();
     window.clearTimeout(hoverHintHideTimer);
     hoverHintState = match;
     const rect = match.rect;
@@ -1611,7 +1818,7 @@
   }
 
   function prepareTemporaryPanelState() {
-    panelState = {
+    return createInteractionPanel({
       mode: "temp",
       id: createId("tmp"),
       term: selectionState.term,
@@ -1626,28 +1833,32 @@
       currentCard: null,
       savedMemoryId: "",
       collapsed: false,
+      streaming: false,
       retry: null
-    };
+    });
   }
 
-  function renderQuestionPanel() {
+  function renderQuestionPanel(instance = getInteractionPanel()) {
+    if (!activateInteractionPanel(instance)) return;
     panelState.mode = "inputReady";
     showInteractionSurfaces({ answer: false, composer: true });
     renderComposerSurface({ followup: false, annotation: true });
     focusQuestionSoon();
   }
 
-  function renderAnswerPanel({ loading = false } = {}) {
-    panelState.mode = loading ? "answerLoading" : (panelState.savedMemoryId || panelState.currentCard?.memory ? "savedThread" : "answerReady");
+  function renderAnswerPanel({ loading = Boolean(panelState?.streaming), instance = getInteractionPanel() } = {}) {
+    if (!activateInteractionPanel(instance, { raise: false })) return;
+    panelState.mode = loading ? "answerLoading" : (hasSavedThreadMessage(panelState.currentCard) ? "savedThread" : "answerReady");
     showInteractionSurfaces({ answer: true, composer: true });
     answerSurface.className = answerSurfaceClass();
     answerSurface.innerHTML = `${renderThread(panelState.currentCard, { loading })}${resizeHandles()}`;
-    renderComposerSurface({ followup: true, disabled: loading });
+    renderComposerSurface({ followup: true, loading });
     updateSelectionActions();
     keepInteractionInViewport();
   }
 
-  function renderFollowupPanel() {
+  function renderFollowupPanel(instance = getInteractionPanel()) {
+    if (!activateInteractionPanel(instance)) return;
     panelState.mode = "followupInput";
     showInteractionSurfaces({ answer: true, composer: true });
     answerSurface.className = answerSurfaceClass();
@@ -1656,12 +1867,12 @@
     focusQuestionSoon();
   }
 
-  function renderHistoryPanel(memoryList, anchorRect) {
+  function renderHistoryPanel(memoryList, anchorRect, existingInstance = null) {
     const cards = memoryList.flatMap((memory) =>
       (memory.cards || []).map((card) => ({ ...card, memory }))
     );
     const first = memoryList[0];
-    panelState = {
+    const state = {
       mode: "historyThreadOpen",
       term: first?.term || "",
       termKey: first?.termKey || "",
@@ -1671,19 +1882,27 @@
       cards,
       currentCard: cards[0] || null,
       savedMemoryId: first?.id || "",
-      collapsed: false
+      collapsed: false,
+      streaming: false
     };
+    const instance = existingInstance ? activateInteractionPanel(existingInstance) : createInteractionPanel(state);
+    if (existingInstance) {
+      Object.assign(existingInstance.state, state);
+      activateInteractionPanel(existingInstance);
+    }
 
     showInteractionSurfaces({ answer: true, composer: false });
     answerSurface.className = answerSurfaceClass();
     answerSurface.innerHTML = `${renderMemoryCards(cards)}${resizeHandles()}`;
-    showPanel(anchorRect);
+    showPanel(anchorRect, instance);
+    return instance;
   }
 
   function showInteractionSurfaces(visible) {
-    panel?.classList.add("hidden");
+    ensureFullUi();
     interactionStack?.classList.remove("hidden");
     interactionStack?.classList.toggle("answer-collapsed", Boolean(panelState?.collapsed));
+    interactionStack?.setAttribute("aria-busy", String(Boolean(panelState?.streaming)));
     threadHeader?.classList.toggle("hidden", !(visible.answer || visible.composer));
     collapsedThreadClose?.classList.toggle("hidden", !panelState?.collapsed);
     inputRow?.classList.toggle("hidden", !visible.composer);
@@ -1697,12 +1916,12 @@
     }
   }
 
-  function renderComposerSurface({ followup = false, annotation = false, disabled = false } = {}) {
+  function renderComposerSurface({ followup = false, annotation = false, loading = false } = {}) {
     const annotationLabel = t("content.saveAnnotation", currentLanguage());
     const sendLabel = t(followup ? "content.sendFollowup" : "content.sendQuestion", currentLanguage());
     inputRow.classList.toggle("send-only", !annotation);
     composerSurface.innerHTML = UI.composerMarkup({
-      disabled,
+      readOnly: loading,
       maxLength: LIMITS.maxAnnotationNoteLength,
       inputLabel: t(followup ? "content.followupAria" : "content.customQuestionAria", currentLanguage()),
       placeholder: t(followup ? "content.followupComposerPlaceholder" : "content.askPlaceholder", currentLanguage())
@@ -1710,12 +1929,12 @@
     annotationActionSurface.dataset.action = "save-annotation";
     annotationActionSurface.title = annotationLabel;
     annotationActionSurface.setAttribute("aria-label", annotationLabel);
-    annotationActionSurface.disabled = disabled;
+    annotationActionSurface.disabled = loading;
     annotationActionSurface.classList.toggle("hidden", !annotation);
     sendActionSurface.dataset.action = followup ? "send-followup" : "send-new";
     sendActionSurface.title = sendLabel;
     sendActionSurface.setAttribute("aria-label", sendLabel);
-    sendActionSurface.disabled = disabled;
+    sendActionSurface.disabled = loading;
     sendActionSurface.classList.remove("hidden");
     composerError.textContent = "";
     composerError.classList.add("hidden");
@@ -1793,38 +2012,85 @@
   }
 
   function threadMessages(card) {
+    if (!card) {
+      return [];
+    }
+    if (card.memory) {
+      return [savedMessageDescriptor(card, card.memory)];
+    }
     const followups = card.followups || [];
-    const saved = Boolean(card.memory || panelState?.savedMemoryId);
     return [
       ...followups.map((item) => ({
         query: displayQuery(item, card.term || card.memory?.term),
         response: item.response || "",
         createdAt: item.createdAt || 0,
-        saved
+        messageId: item.id,
+        parentMessageId: card.id,
+        ...savedRecordForMessage(item.id)
       })),
       {
         query: displayQuery(card, card.term || card.memory?.term),
         response: card.response || "",
         createdAt: card.createdAt || 0,
-        saved
+        messageId: card.id,
+        parentMessageId: "",
+        ...savedRecordForMessage(card.id)
       }
     ].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  }
+
+  function savedMessageDescriptor(card, memory) {
+    return {
+      query: displayQuery(card, memory?.term),
+      response: card.response || "",
+      createdAt: card.createdAt || 0,
+      messageId: card.sourceMessageId || card.id,
+      parentMessageId: card.parentMessageId || "",
+      saved: true,
+      memoryId: memory.id,
+      cardId: card.id
+    };
+  }
+
+  function savedRecordForMessage(messageId) {
+    const sourceMessageId = String(messageId || "");
+    if (!sourceMessageId) {
+      return { saved: false, memoryId: "", cardId: "" };
+    }
+    for (const memory of Object.values(memories)) {
+      const card = (memory.cards || []).find((item) => String(item.sourceMessageId || item.id) === sourceMessageId);
+      if (card) {
+        return { saved: true, memoryId: memory.id, cardId: card.id };
+      }
+    }
+    return { saved: false, memoryId: "", cardId: "" };
+  }
+
+  function hasSavedThreadMessage(card) {
+    if (!card) return false;
+    if (card.memory) return true;
+    return Boolean(savedRecordForMessage(card.id).saved || (card.followups || []).some((item) => savedRecordForMessage(item.id).saved));
   }
 
   function renderResponseMessages(messages) {
     return messages.map((item, index) => {
       const latest = index === 0;
-      const showSave = latest && !item.loading;
-      const saveLabel = item.saved ? t("content.savedToHistory", currentLanguage()) : t("content.save", currentLanguage());
+      const showSave = !item.loading;
+      const saveLabel = item.saved ? t("content.unsave", currentLanguage()) : t("content.save", currentLanguage());
       return UI.responseCardMarkup({
         query: item.query,
         responseHtml: renderMarkdown(item.response || ""),
-        responseId: item.loading ? "inlineai-response" : "",
+        responseId: "",
         loading: item.loading,
         latest,
         showSave,
         saved: item.saved,
+        saveDisabled: Boolean(panelState?.streaming),
         saveAction: "save-answer",
+        savedAction: "unsave-answer",
+        messageId: item.messageId,
+        memoryId: item.memoryId,
+        cardId: item.cardId,
         saveLabel,
         closeLabel: t("content.close", currentLanguage())
       });
@@ -1852,52 +2118,56 @@
     `;
   }
 
-  async function sendQuestion({ questionOverride = "", followup = false, queryKind = "custom" } = {}) {
-    if (!panelState) {
+  async function sendQuestion({ questionOverride = "", followup = false, queryKind = "custom", instance = getInteractionPanel() } = {}) {
+    if (!activateInteractionPanel(instance) || panelState.streaming) {
       return;
     }
 
-    const textarea = shadow.getElementById("inlineai-question");
+    const state = panelState;
+    const textarea = composerSurface.querySelector(".inlineai-question");
+    const panelInstance = getInteractionPanel();
+
     const question = normalizeVisibleText(questionOverride || textarea?.value || "");
     if (!question) {
-      showError(t("content.needQuestion", currentLanguage()));
+      showError(t("content.needQuestion", currentLanguage()), false, panelInstance);
       return;
     }
 
     panelState.pendingQuery = question;
     panelState.pendingQueryKind = queryKind;
-    renderAnswerPanel({ loading: true });
-    const responseNode = ensureResponseNode();
-    const controls = Array.from(interactionStack.querySelectorAll("button,select,textarea"));
-    const previousResponse = threadToText(panelState.currentCard);
+    panelState.streaming = true;
+    renderAnswerPanel({ loading: true, instance: panelInstance });
+    const responseNode = ensureResponseNode(panelInstance);
+    const previousResponse = threadToText(state.currentCard);
     let answer = "";
-
-    panelState.retry = { questionOverride: question, followup, queryKind };
-    clearError();
-    responseNode.classList.remove("hidden");
-    responseNode.innerHTML = "";
-    controls.forEach((control) => {
-      if (control.dataset.action !== "close") {
-        control.disabled = true;
+    const renderBatcher = P.createFrameBatcher({
+      commit(text) {
+        const surface = panelInstance.answerSurface;
+        const shouldFollow = surface.scrollHeight - surface.scrollTop - surface.clientHeight < 48;
+        responseNode.innerHTML = renderMarkdown(text);
+        if (shouldFollow) surface.scrollTop = surface.scrollHeight;
       }
     });
 
+    state.retry = { questionOverride: question, followup, queryKind };
+    clearError(panelInstance);
+    responseNode.classList.remove("hidden");
+    responseNode.innerHTML = "";
     try {
-      await streamApi({
-        messages: buildMessages(panelState.term, question, previousResponse, panelState.context, panelState.currentCard?.query),
+      await streamApi(panelInstance, {
+        messages: buildMessages(state.term, question, previousResponse, state.context, state.currentCard?.query),
         onChunk(chunk) {
           answer += chunk;
-          responseNode.innerHTML = renderMarkdown(answer);
-          responseNode.scrollIntoView({ block: "nearest" });
+          renderBatcher.push(answer);
         }
       });
+      renderBatcher.flush();
 
-      if (followup && panelState.currentCard) {
+      if (followup && state.currentCard) {
         const followupEntry = { id: createId("follow"), query: question, queryKind: "custom", response: answer, createdAt: Date.now() };
-        panelState.currentCard.followups = [...(panelState.currentCard.followups || []), followupEntry];
-        await persistFollowupIfSaved(followupEntry);
+        state.currentCard.followups = [...(state.currentCard.followups || []), followupEntry];
       } else {
-        panelState.currentCard = {
+        state.currentCard = {
           id: createId("card"),
           messageId: createId("msg"),
           query: question,
@@ -1908,29 +2178,41 @@
           synced: false,
           followups: []
         };
-        panelState.cards = [panelState.currentCard];
+        state.cards = [state.currentCard];
       }
 
-      renderAnswerPanel();
+      state.streaming = false;
+      renderAnswerPanel({ instance: panelInstance });
       showToast(t("content.temporaryAnswer", currentLanguage()));
     } catch (error) {
-      showError(humanizeContentError(error), true);
+      renderBatcher.flush();
+      state.streaming = false;
+      if (interactionPanels.has(panelInstance.id)) {
+        renderAnswerPanel({ instance: panelInstance });
+        showError(humanizeContentError(error), true, panelInstance);
+      }
     } finally {
-      interactionStack.querySelectorAll("button,select,textarea").forEach((control) => {
-        control.disabled = false;
-      });
+      state.streaming = false;
     }
   }
 
-  async function saveCurrentAnswer({ kind }) {
-    if (!panelState?.currentCard) {
-      showError(t("content.noAnswerToSave", currentLanguage()));
+  async function saveCurrentAnswer({ kind, messageId, instance = getInteractionPanel() }) {
+    if (!activateInteractionPanel(instance) || !panelState?.currentCard) {
+      showError(t("content.noAnswerToSave", currentLanguage()), false, instance);
       return;
     }
 
-    const excerpt = kind === "excerpt" ? getSelectedResponseExcerpt() : "";
+    const message = findThreadMessage(panelState.currentCard, messageId);
+    if (!message) {
+      showError(t("content.noAnswerToSave", currentLanguage()), false, instance);
+      return;
+    }
+    if (savedRecordForMessage(message.id).saved) {
+      return;
+    }
+    const excerpt = kind === "excerpt" ? getSelectedResponseExcerpt(message.id) : "";
     if (kind === "excerpt" && !excerpt) {
-      showError(t("content.selectAnswerFirst", currentLanguage()));
+      showError(t("content.selectAnswerFirst", currentLanguage()), false, instance);
       return;
     }
 
@@ -1938,27 +2220,89 @@
     const now = Date.now();
     const memory = findOrCreateMemory(scope, now);
     const card = {
-      id: kind === "excerpt" ? createId("card") : panelState.currentCard.id,
-      messageId: panelState.currentCard.messageId || createId("msg"),
-      query: panelState.currentCard.query,
-      queryKind: panelState.currentCard.queryKind || "custom",
-      response: kind === "excerpt" ? excerpt : panelState.currentCard.response,
+      id: createId("card"),
+      sourceMessageId: message.id,
+      threadId: panelState.threadId || panelState.currentCard.threadId || panelState.currentCard.id,
+      parentMessageId: message.parentMessageId || "",
+      query: message.query,
+      queryKind: message.queryKind || "custom",
+      response: kind === "excerpt" ? excerpt : message.response,
       kind: kind === "excerpt" ? "excerpt" : "full",
-      createdAt: now,
-      synced: true,
-      followups: panelState.currentCard.followups || []
+      createdAt: message.createdAt || now,
+      savedAt: now,
+      synced: true
     };
 
     memory.cards = [...(memory.cards || []), card];
     memory.updatedAt = now;
     memories = { ...memories, [memory.id]: memory };
-    panelState.savedMemoryId = memory.id;
-    panelState.currentCard = { ...card, memory };
-    panelState.cards = [panelState.currentCard];
 
     await chrome.storage.local.set({ [STORAGE_KEYS.memories]: memories });
-    renderAnswerPanel();
+    renderAnswerPanel({ instance });
     showToast(kind === "excerpt" ? t("content.excerptSaved", currentLanguage()) : t("content.savedToHistory", currentLanguage()));
+  }
+
+  function findThreadMessage(card, messageId) {
+    if (!card) return null;
+    const targetId = String(messageId || card.id);
+    if (String(card.id) === targetId || String(card.sourceMessageId || "") === targetId) {
+      return {
+        id: card.sourceMessageId || card.id,
+        parentMessageId: card.parentMessageId || "",
+        query: card.query || "",
+        queryKind: card.queryKind || "custom",
+        response: card.response || "",
+        createdAt: card.createdAt || 0
+      };
+    }
+    const followup = (card.followups || []).find((item) => String(item.id) === targetId);
+    return followup ? {
+      id: followup.id,
+      parentMessageId: card.id,
+      query: followup.query || "",
+      queryKind: followup.queryKind || "custom",
+      response: followup.response || "",
+      createdAt: followup.createdAt || 0
+    } : null;
+  }
+
+  async function unsaveAnswer(memoryId, cardId, instance = getInteractionPanel()) {
+    if (instance) activateInteractionPanel(instance);
+    const memory = memories[memoryId];
+    if (!memory || !cardId) {
+      return;
+    }
+    const wasHistoryPanel = panelState?.mode === "historyThreadOpen";
+    const historyAnchor = interactionStack ? rectToObject(interactionStack.getBoundingClientRect()) : null;
+
+    const cards = (memory.cards || []).filter((card) => card.id !== cardId);
+    if (cards.length) {
+      memories = { ...memories, [memoryId]: { ...memory, cards, updatedAt: Date.now() } };
+    } else {
+      const next = { ...memories };
+      delete next[memoryId];
+      memories = next;
+      removeLocalMarksForMemory(memoryId);
+    }
+
+    await chrome.storage.local.set({ [STORAGE_KEYS.memories]: memories });
+    if (wasHistoryPanel) {
+      const remainingMemories = (panelState?.memories || [])
+        .map((item) => memories[item.id])
+        .filter(Boolean);
+      if (remainingMemories.length) {
+      renderHistoryPanel(remainingMemories, historyAnchor || { left: 12, top: 12, width: 1, height: 1, right: 13, bottom: 13 }, instance);
+      } else {
+        panelState.currentCard = null;
+        panelState.savedMemoryId = "";
+        showInteractionSurfaces({ answer: true, composer: false });
+        answerSurface.className = answerSurfaceClass();
+        answerSurface.innerHTML = `<div class="notice">${escapeHtml(t("content.recordDeleted", currentLanguage()))}</div>`;
+      }
+    } else {
+      renderAnswerPanel({ instance });
+    }
+    showToast(t("content.unsavedFromHistory", currentLanguage()));
   }
 
   function findOrCreateMemory(scope, now) {
@@ -1999,27 +2343,8 @@
     };
   }
 
-  async function persistFollowupIfSaved(followupEntry) {
-    const memoryId = panelState.currentCard?.memory?.id || panelState.savedMemoryId;
-    if (!memoryId || !memories[memoryId]) {
-      return;
-    }
-
-    const memory = memories[memoryId];
-    const cards = (memory.cards || []).map((card) => {
-      if (card.id !== panelState.currentCard.id) {
-        return card;
-      }
-      return {
-        ...card,
-        followups: [...(card.followups || []), followupEntry]
-      };
-    });
-    memories = { ...memories, [memoryId]: { ...memory, cards, updatedAt: Date.now() } };
-    await chrome.storage.local.set({ [STORAGE_KEYS.memories]: memories });
-  }
-
-  async function deleteMemoryCard(memoryId, cardId) {
+  async function deleteMemoryCard(memoryId, cardId, instance = getInteractionPanel()) {
+    if (instance) activateInteractionPanel(instance);
     const memory = memories[memoryId];
     if (!memory) {
       return;
@@ -2040,9 +2365,8 @@
 
     await chrome.storage.local.set({ [STORAGE_KEYS.memories]: memories });
     removeLocalMarksForMemory(memoryId);
-    scheduleHighlight();
     if (memories[memoryId]) {
-      renderHistoryPanel([memories[memoryId]], rectToObject(interactionStack.getBoundingClientRect()));
+      renderHistoryPanel([memories[memoryId]], rectToObject(interactionStack.getBoundingClientRect()), instance);
       return;
     }
     if (panelState) {
@@ -2058,23 +2382,23 @@
     if (!surface) {
       return;
     }
-    if (surface.id === "panel" && panelState) {
-      panelState.collapsed = !panelState.collapsed;
-      surface.classList.toggle("collapsed", panelState.collapsed);
+    if (surface.id === "panel") {
+      annotationPanelState.collapsed = !annotationPanelState.collapsed;
+      surface.classList.toggle("collapsed", annotationPanelState.collapsed);
       return;
     }
     surface.classList.toggle("collapsed");
   }
 
-  function toggleInteractionCollapse() {
-    if (!panelState || !answerSurface || answerSurface.classList.contains("hidden")) {
+  function toggleInteractionCollapse(instance = getInteractionPanel()) {
+    if (!activateInteractionPanel(instance) || !panelState || !answerSurface || answerSurface.classList.contains("hidden")) {
       return;
     }
     panelState.collapsed = !panelState.collapsed;
     interactionStack.classList.toggle("answer-collapsed", panelState.collapsed);
     collapsedThreadClose?.classList.toggle("hidden", !panelState.collapsed);
     updateQuoteChip();
-    keepInteractionInViewport();
+    keepInteractionInViewport(instance);
   }
 
   function openMemoryFromMark(mark) {
@@ -2096,14 +2420,13 @@
   function openMemoryList(memoryList, anchorRect) {
     hideHistoryHint();
     hideBubble();
-    pinCurrentPanelSnapshot();
     renderHistoryPanel(memoryList, anchorRect);
   }
 
   function panelClass() {
     return [
       "surface",
-      panelState?.collapsed ? "collapsed" : ""
+      annotationPanelState.collapsed ? "collapsed" : ""
     ].filter(Boolean).join(" ");
   }
 
@@ -2130,45 +2453,17 @@
   }
 
   function panelIsOpen() {
-    return Boolean(
-      (panel && !panel.classList.contains("hidden")) ||
-      (interactionStack && !interactionStack.classList.contains("hidden"))
-    );
+    return Boolean((panel && !panel.classList.contains("hidden")) || interactionPanels.size);
   }
 
-  function pinCurrentPanelSnapshot() {
-    if (!panelIsOpen() || !panelState?.currentCard) {
-      return;
-    }
-
-    const source = answerSurface?.querySelector(".response-card.latest");
-    if (!source) {
-      return;
-    }
-    const sourceRect = source.getBoundingClientRect();
-    const snapshot = source.cloneNode(true);
-    snapshot.id = createId("pinned");
-    snapshot.dataset.inlineaiPinnedPanel = String(++pinnedPanelCounter);
-    snapshot.classList.remove("latest");
-    snapshot.classList.add("pinned-response-card");
-    snapshot.style.left = `${sourceRect.left}px`;
-    snapshot.style.top = `${sourceRect.top}px`;
-    snapshot.style.width = `${sourceRect.width}px`;
-    snapshot.querySelectorAll("[id]").forEach((node) => node.removeAttribute("id"));
-    snapshot.querySelectorAll(".response-favourite, .resize-handle").forEach((node) => node.remove());
-    snapshot.querySelectorAll("[data-action]").forEach((node) => {
-      if (node.dataset.action === "close") {
-        node.dataset.action = "close-pinned";
-        return;
-      }
-      node.removeAttribute("data-action");
-      node.setAttribute("aria-disabled", "true");
+  function canShowHistoryHint() {
+    return UI.canShowHistoryHint({
+      annotationOpen: Boolean(panel && !panel.classList.contains("hidden")),
+      panels: visibleInteractionPanels().map((instance) => ({
+        collapsed: Boolean(instance.state.collapsed),
+        streaming: Boolean(instance.state.streaming)
+      }))
     });
-    shadow.insertBefore(snapshot, interactionStack);
-  }
-
-  function closePinnedPanel(button) {
-    button.closest("[data-inlineai-pinned-panel]")?.remove();
   }
 
   function selectCardFromButton(button) {
@@ -2186,11 +2481,11 @@
     panelState.savedMemoryId = memory.id;
   }
 
-  function retryLastRequest() {
-    if (!panelState?.retry) {
+  function retryLastRequest(instance = getInteractionPanel()) {
+    if (!activateInteractionPanel(instance) || !panelState?.retry) {
       return;
     }
-    sendQuestion(panelState.retry);
+    sendQuestion({ ...panelState.retry, instance });
   }
 
   function threadToText(card) {
@@ -2241,15 +2536,13 @@
     ];
   }
 
-  function streamApi({ messages, onChunk }) {
-    if (activePort) {
-      activePort.disconnect();
-      activePort = null;
-    }
-
+  function streamApi(instance, { messages, onChunk }) {
     const requestId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    let port;
     try {
-      activePort = chrome.runtime.connect({ name: PORTS.stream });
+      port = chrome.runtime.connect({ name: PORTS.stream });
+      instance.port = port;
+      if (activePanelId === instance.id) activePort = port;
     } catch (error) {
       return Promise.reject(error);
     }
@@ -2262,8 +2555,8 @@
           return;
         }
         settled = true;
-        const port = activePort;
-        activePort = null;
+        if (instance.port === port) instance.port = null;
+        if (activePanelId === instance.id) activePort = instance.port;
         try {
           port?.disconnect();
         } catch (_) {
@@ -2272,7 +2565,7 @@
         callback(value);
       }
 
-      activePort.onMessage.addListener((message) => {
+      port.onMessage.addListener((message) => {
         if (message?.requestId !== requestId) {
           return;
         }
@@ -2285,35 +2578,17 @@
         }
       });
 
-      activePort.onDisconnect.addListener(() => {
+      port.onDisconnect.addListener(() => {
         if (!settled) {
           finish(reject, new Error(t("content.backgroundDisconnected", currentLanguage())));
         }
       });
 
-      activePort.postMessage({
+      port.postMessage({
         type: MESSAGE_TYPES.apiCall,
         requestId,
         payload: { messages }
       });
-    });
-  }
-
-  function scheduleHighlight() {
-    window.clearTimeout(highlightTimer);
-    highlightTimer = window.setTimeout(runHighlight, 80);
-  }
-
-  function runHighlight() {
-    removeAllHighlights();
-    removeAllLocalHighlights();
-  }
-
-  function removeAllHighlights() {
-    document.querySelectorAll(`mark.${CSS.highlightClass}`).forEach((mark) => {
-      const text = document.createTextNode(mark.textContent || "");
-      mark.replaceWith(text);
-      text.parentNode?.normalize();
     });
   }
 
@@ -2329,16 +2604,12 @@
     });
   }
 
-  function removeAllLocalHighlights() {
-    document.querySelectorAll(`mark.${CSS.localHighlightClass}`).forEach((mark) => {
-      const text = document.createTextNode(mark.textContent || "");
-      mark.replaceWith(text);
-      text.parentNode?.normalize();
-    });
-  }
-
   function applicableMemories() {
     return Object.values(memories).filter(isMemoryApplicable);
+  }
+
+  function rebuildMemoryIndex() {
+    memoryIndex = P.buildMemoryIndex(memories, isMemoryApplicable, hasSyncedCards, termKeyFor);
   }
 
   function isMemoryApplicable(memory) {
@@ -2396,14 +2667,32 @@
     `;
   }
 
-  function showPanel(anchorRect) {
+  function showPanel(anchorRect, instance = null) {
     hideHistoryHint();
-    const target = panelState?.mode === "annotations" ? panel : interactionStack;
+    const target = instance?.root || (annotationPanelState.open ? panel : interactionStack);
+    if (!target) return;
     target.classList.remove("hidden");
-    window.requestAnimationFrame(() => positionElement(target, anchorRect, { mode: "panel" }));
+    window.requestAnimationFrame(() => {
+      if (!instance) {
+        positionElement(target, anchorRect, { mode: "panel" });
+        return;
+      }
+      const rect = target.getBoundingClientRect();
+      const occupied = visibleInteractionPanels(instance.id).map((item) => rectToObject(item.root.getBoundingClientRect()));
+      const placement = L.placePanel({
+        anchor: anchorRect,
+        width: rect.width || 560,
+        height: rect.height || 280,
+        viewport: { width: window.innerWidth, height: window.innerHeight },
+        occupied
+      });
+      target.style.left = `${Math.round(placement.left)}px`;
+      target.style.top = `${Math.round(placement.top)}px`;
+    });
   }
 
-  function keepInteractionInViewport() {
+  function keepInteractionInViewport(instance = getInteractionPanel()) {
+    if (!activateInteractionPanel(instance, { raise: false })) return;
     window.requestAnimationFrame(() => {
       if (!interactionStack || interactionStack.classList.contains("hidden")) {
         return;
@@ -2418,23 +2707,17 @@
   }
 
   function closePanel() {
-    if (activePort) {
-      activePort.disconnect();
-      activePort = null;
+    if (interactionPanels.size) {
+      closeInteractionPanel();
+      return;
     }
+    closeAnnotationPanel();
+  }
+
+  function closeAnnotationPanel() {
     panel?.classList.add("hidden");
     panel?.classList.remove("collapsed");
-    interactionStack?.classList.add("hidden");
-    interactionStack?.classList.remove("answer-collapsed");
-    threadHeader?.classList.add("hidden");
-    inputRow?.classList.add("hidden");
-    inputRow?.classList.remove("send-only");
-    answerSurface?.classList.add("hidden");
-    answerSurface?.style.removeProperty("height");
-    annotationActionSurface?.classList.add("hidden");
-    sendActionSurface?.classList.add("hidden");
-    composerError?.classList.add("hidden");
-    panelState = null;
+    annotationPanelState = { collapsed: false, editingAnnotationId: "", open: false };
   }
 
   function hideBubble() {
@@ -2525,15 +2808,15 @@
     return element.closest?.("p, li, blockquote, article, section, main, [data-message-author-role], [class*='message'], [class*='markdown']") || element;
   }
 
-  function ensureResponseNode() {
-    let responseNode = shadow.getElementById("inlineai-response");
+  function ensureResponseNode(instance = getInteractionPanel()) {
+    const surface = instance?.answerSurface;
+    let responseNode = surface?.querySelector(".response-card.latest .response");
     if (!responseNode) {
-      const body = answerSurface.querySelector(".response-card.latest .response-body");
+      const body = surface?.querySelector(".response-card.latest .response-body");
       if (!body) {
         throw new Error("Missing active response card");
       }
       responseNode = document.createElement("div");
-      responseNode.id = "inlineai-response";
       responseNode.className = "response";
       body.appendChild(responseNode);
     }
@@ -2541,17 +2824,18 @@
   }
 
   function updateSelectionActions() {
-    const excerpt = getSelectedResponseExcerpt();
-    const save = shadow.getElementById("inlineai-save-button");
-    if (save && save.getAttribute("aria-disabled") !== "true") {
+    const selected = getSelectedResponseExcerpt();
+    shadow.querySelectorAll(".response-favourite[data-message-id]").forEach((save) => {
+      if (save.dataset.action === "unsave-answer" || save.disabled) return;
+      const excerpt = selected?.messageId === save.dataset.messageId ? selected.text : "";
       const label = excerpt ? t("content.saveExcerpt", currentLanguage()) : t("content.save", currentLanguage());
       save.dataset.action = excerpt ? "save-excerpt" : "save-answer";
       save.title = label;
       save.setAttribute("aria-label", label);
-    }
+    });
   }
 
-  function getSelectedResponseExcerpt() {
+  function getSelectedResponseExcerpt(expectedMessageId = "") {
     const selection = shadow.getSelection?.() || document.getSelection();
     const text = normalizeVisibleText(selection?.toString() || "");
     if (!text) {
@@ -2560,14 +2844,19 @@
     const range = selection.rangeCount ? selection.getRangeAt(0) : null;
     const container = range?.commonAncestorContainer;
     const element = container?.nodeType === Node.ELEMENT_NODE ? container : container?.parentElement;
-    if (!element?.closest?.(".response")) {
+    const response = element?.closest?.(".response[data-message-id]");
+    if (!response) {
       return "";
     }
-    return text.slice(0, 1200);
+    const messageId = response.dataset.messageId || "";
+    if (expectedMessageId && messageId !== expectedMessageId) {
+      return "";
+    }
+    return expectedMessageId ? text.slice(0, 1200) : { messageId, text: text.slice(0, 1200) };
   }
 
-  function showError(message, retryable = false) {
-    const node = shadow.getElementById("inlineai-error");
+  function showError(message, retryable = false, instance = getInteractionPanel()) {
+    const node = instance?.composerError;
     if (node) {
       node.classList.add("error");
       node.innerHTML = `
@@ -2578,8 +2867,8 @@
     }
   }
 
-  function clearError() {
-    const node = shadow.getElementById("inlineai-error");
+  function clearError(instance = getInteractionPanel()) {
+    const node = instance?.composerError;
     if (node) {
       node.textContent = "";
       node.classList.add("error");
@@ -2587,9 +2876,9 @@
     }
   }
 
-  function focusQuestionSoon() {
+  function focusQuestionSoon(instance = getInteractionPanel()) {
     window.setTimeout(() => {
-      const textarea = shadow.getElementById("inlineai-question");
+      const textarea = instance?.composerSurface?.querySelector(".inlineai-question");
       if (!textarea || textarea.closest(".hidden")) {
         return;
       }
@@ -2648,8 +2937,13 @@
     if (panel) {
       panel.setAttribute("aria-label", t("app.dialogLabel", currentLanguage()));
     }
-    interactionStack?.setAttribute("aria-label", t("app.dialogLabel", currentLanguage()));
-    updateQuoteChip();
+    const activeBeforeLocalization = getInteractionPanel();
+    interactionPanels.forEach((instance) => {
+      activateInteractionPanel(instance, { raise: false });
+      interactionStack.setAttribute("aria-label", t("app.dialogLabel", currentLanguage()));
+      updateQuoteChip();
+    });
+    if (activeBeforeLocalization) activateInteractionPanel(activeBeforeLocalization, { raise: false });
     if (activeAnnotationBatch) {
       renderAnnotationBasket(false);
     }
@@ -2723,8 +3017,10 @@
     activeAnnotationBatch = id && annotationBatches[id] ? A.normalizeBatch(annotationBatches[id]) : null;
     annotationRanges.clear();
     if (activeAnnotationBatch?.items?.length) {
+      ensureFullUi();
+      const restoredRanges = AR.restoreAnchors(activeAnnotationBatch.items);
       for (const item of activeAnnotationBatch.items) {
-        const restored = AR.restoreAnchor(item.anchor);
+        const restored = restoredRanges.get(item.id) || { range: null, matchCount: 0 };
         if (restored.range) annotationRanges.set(item.id, restored.range);
         item.anchorState = restored.range ? "ready" : "missing";
         item.matchCount = Math.max(item.matchCount || 1, restored.matchCount || 0);
@@ -2735,6 +3031,14 @@
     } else {
       clearAnnotationUi();
     }
+  }
+
+  function scheduleActiveAnnotationReload() {
+    window.clearTimeout(annotationReloadTimer);
+    annotationReloadTimer = window.setTimeout(() => {
+      annotationReloadTimer = null;
+      void loadActiveAnnotationBatch();
+    }, 0);
   }
 
   async function saveActiveAnnotationBatch() {
@@ -2748,6 +3052,11 @@
     } else {
       activeAnnotationBatches[activeAnnotationBatch.pageKey] = activeAnnotationBatch.id;
     }
+    lastLocalAnnotationWrite = {
+      id: activeAnnotationBatch.id,
+      pageKey: activeAnnotationBatch.pageKey,
+      updatedAt: activeAnnotationBatch.updatedAt
+    };
     await chrome.storage.local.set({
       [STORAGE_KEYS.annotationBatches]: annotationBatches,
       [STORAGE_KEYS.activeAnnotationBatches]: activeAnnotationBatches
@@ -2756,7 +3065,8 @@
   }
 
   async function saveAnnotationFromPanel() {
-    const input = shadow.getElementById("inlineai-question");
+    const instance = getInteractionPanel();
+    const input = instance?.composerSurface?.querySelector(".inlineai-question");
     const note = String(input?.value || "").trim();
     if (!note) return showError(t("content.annotationNeedNote", currentLanguage()));
     if (!selectionState?.range || selectionState.term.length > LIMITS.maxAnnotationSelectionLength) {
@@ -2791,7 +3101,7 @@
     activeAnnotationBatch.items.push(item);
     annotationRanges.set(item.id, selectionState.range.cloneRange());
     await saveActiveAnnotationBatch();
-    closePanel();
+    closeInteractionPanel(instance);
     hideBubble();
     window.getSelection()?.removeAllRanges();
     bindAnnotationObservers();
@@ -2803,7 +3113,10 @@
     if (!activeAnnotationBatch?.items?.length) return clearAnnotationUi();
     const count = activeAnnotationBatch.items.length;
     const copied = activeAnnotationBatch.status === A.STATUS.copiedPendingPaste;
-    const showExpanded = copied || expanded;
+    if (expanded && !copied) {
+      annotationBasketExpandedUntil = Date.now() + 4000;
+    }
+    const showExpanded = copied || Date.now() < annotationBasketExpandedUntil;
     clearAnnotationBasketTimers();
     annotationBasket.classList.remove("hidden", "dragging", "compacting");
     annotationBasket.classList.toggle("compact", !showExpanded);
@@ -2818,10 +3131,11 @@
     annotationBasket.setAttribute("aria-label", copied ? `${t("content.annotationCopied", currentLanguage())}. ${basketAria}` : basketAria);
     annotationBasket.setAttribute("title", t("content.annotationSaved", { count }, currentLanguage()));
     if (showExpanded && !copied) {
+      const remaining = Math.max(0, annotationBasketExpandedUntil - Date.now());
       annotationBasketTimer = window.setTimeout(() => {
         annotationBasket.classList.add("compacting");
         annotationBasketCompactTimer = window.setTimeout(() => renderAnnotationBasket(false), 200);
-      }, 4000);
+      }, remaining);
     }
   }
 
@@ -2834,17 +3148,16 @@
 
   function openAnnotationPanel(annotationId) {
     if (!activeAnnotationBatch?.items?.length) return;
-    panelState = { mode: "annotations", editingAnnotationId: annotationId || "", collapsed: false };
+    annotationPanelState = { mode: "annotations", editingAnnotationId: annotationId || "", collapsed: false, open: true };
     renderAnnotationPanel(annotationId || "");
     showPanel({ left: Math.max(12, innerWidth - 560), right: innerWidth - 16, top: Math.max(24, innerHeight - 500), bottom: innerHeight - 24, width: 520, height: 32 });
   }
 
   function renderAnnotationPanel(editingId) {
-    if (!activeAnnotationBatch) return closePanel();
-    interactionStack?.classList.add("hidden");
+    if (!activeAnnotationBatch) return closeAnnotationPanel();
     const items = A.sortItems(activeAnnotationBatch.items);
     const info = A.payloadInfo(activeAnnotationBatch, currentLanguage());
-    panelState = { mode: "annotations", editingAnnotationId: editingId || "", collapsed: false };
+    annotationPanelState = { mode: "annotations", editingAnnotationId: editingId || "", collapsed: false, open: true };
     const cards = items.map((item) => {
       const editing = item.id === editingId;
       const preview = annotationPreviewParts(item);
@@ -2908,7 +3221,7 @@
       delete activeAnnotationBatches[activeAnnotationBatch.pageKey];
       activeAnnotationBatch = null;
       await chrome.storage.local.set({ [STORAGE_KEYS.annotationBatches]: annotationBatches, [STORAGE_KEYS.activeAnnotationBatches]: activeAnnotationBatches });
-      closePanel();
+      closeAnnotationPanel();
       clearAnnotationUi();
       showToast(t("content.annotationEmptyAfterDelete", currentLanguage()));
       return;
@@ -2925,7 +3238,7 @@
     if (annotationObserver || !activeAnnotationBatch) return;
     bindAnnotationViewportListeners();
     syncAnnotationPasteListeners();
-    annotationObserver = new MutationObserver(scheduleAnnotationHighlights);
+    annotationObserver = new MutationObserver(scheduleAnnotationMutationHighlights);
     annotationObserver.observe(document.body, { childList: true, subtree: true });
     if (globalThis.ResizeObserver) {
       annotationResizeObserver = new ResizeObserver(scheduleAnnotationHighlights);
@@ -2941,10 +3254,19 @@
     });
   }
 
+  function scheduleAnnotationMutationHighlights() {
+    if (annotationMutationTimer || !activeAnnotationBatch) return;
+    annotationMutationTimer = window.setTimeout(() => {
+      annotationMutationTimer = null;
+      scheduleAnnotationHighlights();
+    }, 100);
+  }
+
   function renderAnnotationHighlights() {
     if (!activeAnnotationBatch) return clearAnnotationUi();
     annotationHighlightLayer.innerHTML = "";
     annotationRectCache = [];
+    const fragment = document.createDocumentFragment();
     for (const item of activeAnnotationBatch.items) {
       let range = annotationRanges.get(item.id);
       if (!range || !range.startContainer?.isConnected || A.comparableText(range.toString()) !== A.comparableText(item.quote)) {
@@ -2961,15 +3283,20 @@
         const mark = document.createElement("span");
         mark.className = "annotation-highlight";
         mark.style.cssText = `left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;height:${rect.height}px;`;
-        annotationHighlightLayer.appendChild(mark);
+        fragment.appendChild(mark);
       });
     }
+    annotationHighlightLayer.appendChild(fragment);
   }
 
   function clearAnnotationUi() {
     clearAnnotationBasketTimers();
+    annotationBasketExpandedUntil = 0;
+    lastLocalAnnotationWrite = null;
     annotationBasket?.classList.add("hidden");
     annotationHighlightLayer && (annotationHighlightLayer.innerHTML = "");
+    window.clearTimeout(annotationMutationTimer);
+    annotationMutationTimer = null;
     editorDropTarget?.classList.add("hidden");
     annotationRectCache = [];
     annotationObserver?.disconnect();
@@ -3152,7 +3479,7 @@
     await chrome.storage.local.set({ [STORAGE_KEYS.activeAnnotationBatches]: activeAnnotationBatches });
     activeAnnotationBatch = null;
     annotationRanges.clear();
-    closePanel();
+    closeAnnotationPanel();
     clearAnnotationUi();
     showToast(`${message} ${t("content.annotationHistoryHint", currentLanguage())}`);
   }

@@ -133,6 +133,8 @@ const requiredFiles = new Set([
   "src/shared/settings-form.js",
   "src/shared/onboarding.js",
   "src/content/annotation-runtime.js",
+  "src/content/content-performance.js",
+  "src/content/panel-layout.js",
   "src/content/content-ui.js",
   "src/content/content.js",
   "src/popup/popup.html",
@@ -152,6 +154,8 @@ const requiredFiles = new Set([
   ,"tests/annotation-match.test.mjs"
   ,"tests/annotation-storage.test.mjs"
   ,"tests/content-ui.test.mjs"
+  ,"tests/content-performance.test.mjs"
+  ,"tests/panel-layout.test.mjs"
   ,"tests/onboarding-state.test.mjs"
   ,"tests/ui-contract.test.mjs"
   ,"tests/fixtures/annotation-playground.html"
@@ -176,7 +180,7 @@ for (const script of manifest.content_scripts || []) {
   }
 }
 
-const expectedContentOrder = ["src/shared/constants.js", "src/shared/annotations.js", "src/content/annotation-runtime.js", "src/content/content-ui.js", "src/content/content.js"];
+const expectedContentOrder = ["src/shared/constants.js", "src/shared/annotations.js", "src/content/annotation-runtime.js", "src/content/content-performance.js", "src/content/panel-layout.js", "src/content/content-ui.js", "src/content/content.js"];
 const loadedScripts = manifest.content_scripts?.[0]?.js || [];
 if (expectedContentOrder.some((script, index) => loadedScripts[index] !== script)) {
   fail("Annotation content scripts are not loaded in dependency order");
@@ -237,6 +241,8 @@ for (const [declaredSize, iconPath] of Object.entries(manifest.action?.default_i
   "src/shared/settings-form.js",
   "src/shared/onboarding.js",
   "src/content/annotation-runtime.js",
+  "src/content/content-performance.js",
+  "src/content/panel-layout.js",
   "src/content/content-ui.js",
   "src/content/content.js",
   "src/popup/popup.js",

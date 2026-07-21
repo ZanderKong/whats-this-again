@@ -30,6 +30,8 @@
         "src/shared/constants.js",
         "src/shared/annotations.js",
         "src/content/annotation-runtime.js",
+        "src/content/content-performance.js",
+        "src/content/panel-layout.js",
         "src/content/content-ui.js",
         "src/content/content.js"
       ],
