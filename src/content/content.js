@@ -27,7 +27,8 @@
     getThemePreset,
     getEffectiveLanguage,
     t,
-    isDefaultPromptQuestion
+    isDefaultPromptQuestion,
+    selectionActionForGesture
   } = C;
 
   const ROOT_ID = "inlineai-shadow-host";
@@ -79,6 +80,8 @@
   let annotationRanges = new Map();
   let annotationRectCache = [];
   let annotationBasket = null;
+  let morphGhost = null;
+  let morphAnimation = null;
   let annotationHighlightLayer = null;
   let editorDropTarget = null;
   let annotationBasketTimer = null;
@@ -148,7 +151,7 @@
         #bubble { position:fixed; width:16px; height:16px; border:2px solid rgba(255,253,247,.92); border-radius:50%; background:var(--iai-accent); color:transparent; cursor:pointer; box-shadow:0 0 0 5px rgba(var(--iai-accent-rgb),.16),0 8px 18px rgba(61,50,42,.22); pointer-events:auto; }
         #toast { position:fixed; right:16px; bottom:16px; max-width:min(360px,calc(100vw - 32px)); padding:10px 12px; border-radius:10px; background:#1f2937; color:#fff; pointer-events:auto; }
       </style>
-      <button id="bubble" class="hidden" type="button" title="${escapeHtml(t("content.bubbleTitle", currentLanguage()))}" aria-label="${escapeHtml(t("content.bubbleTitle", currentLanguage()))}"></button>
+      <button id="bubble" class="hidden" type="button" title="${escapeHtml(bubbleActionLabel())}" aria-label="${escapeHtml(bubbleActionLabel())}"></button>
       <div id="toast" class="hidden"></div>
     `;
     bubble = shadow.getElementById("bubble");
@@ -241,6 +244,30 @@
         }
         #bubble.press-hold::after {
           content: none;
+        }
+        #morph-ghost {
+          position: fixed;
+          z-index: 200;
+          display: block;
+          border: 1px solid rgba(var(--iai-accent-rgb), 0.22);
+          border-radius: 999px;
+          background: var(--iai-interaction-paper);
+          box-shadow: var(--iai-interaction-shadow);
+          pointer-events: none;
+          transform-origin: center;
+        }
+        #morph-ghost.answer { border-radius: 26px; }
+        #morph-ghost.composer { border-radius: 999px; }
+        #morph-ghost.drawer {
+          border-radius: 18px;
+          background: var(--iai-paper);
+          box-shadow: var(--iai-shadow);
+        }
+        .morph-pending { visibility: hidden !important; }
+        .interaction-stack.morph-reveal > * { animation: morph-content-in 130ms ease-out both; }
+        @keyframes morph-content-in {
+          from { opacity: 0; transform: translateY(4px); }
+          to { opacity: 1; transform: translateY(0); }
         }
         @keyframes dot-rise {
           from { opacity: 0; transform: translate(4px, 5px) scale(0.55); }
@@ -932,9 +959,29 @@
           box-shadow: 0 9px 22px rgba(var(--iai-accent-rgb), 0.27);
         }
         .annotation-action { color: var(--iai-accent-strong); border-color: rgba(var(--iai-accent-rgb), .32); }
+        .annotation-drawer {
+          top: 16px !important;
+          right: 16px !important;
+          bottom: 16px !important;
+          left: auto !important;
+          width: min(408px, calc(100vw - 32px)) !important;
+          min-width: 0 !important;
+          height: auto !important;
+          min-height: 0;
+          max-height: none;
+          border-radius: 18px;
+        }
+        .annotation-drawer .surface-header { cursor: default; }
+        .annotation-drawer .resize-handle { display: none; }
         @media (max-width: 520px) {
           .surface { width: calc(100vw - 18px); }
           .interaction-stack { width: calc(100vw - 18px); min-width: 0; }
+          .annotation-drawer {
+            top: 12px !important;
+            right: 12px !important;
+            bottom: 12px !important;
+            width: calc(100vw - 24px) !important;
+          }
           .term-title { max-width: calc(100vw - 120px); font-size: 16px; }
           .surface-body { padding: 10px; }
           .input-row { grid-template-columns: minmax(0, 1fr) 44px 44px; }
@@ -950,16 +997,18 @@
           .round-action,
           .response-card,
           .response-close,
-          .response-favourite { transition-duration: 1ms !important; animation-duration: 1ms !important; }
+          .response-favourite,
+          .interaction-stack.morph-reveal > * { transition-duration: 1ms !important; animation-duration: 1ms !important; }
         }
       </style>
-      <button id="bubble" class="hidden" type="button" title="${escapeHtml(t("content.bubbleTitle", currentLanguage()))}" aria-label="${escapeHtml(t("content.bubbleTitle", currentLanguage()))}"></button>
+      <button id="bubble" class="hidden" type="button" title="${escapeHtml(bubbleActionLabel())}" aria-label="${escapeHtml(bubbleActionLabel())}"></button>
       <div id="history-hint-line" class="hidden"></div>
       <button id="history-hint" class="hidden" type="button" data-action="open-hover-memory" title="${escapeHtml(t("content.historyHintTitle", currentLanguage()))}" aria-label="${escapeHtml(t("content.historyHintTitle", currentLanguage()))}"></button>
       <div id="annotation-highlight-layer" aria-hidden="true"></div>
       <div id="editor-drop-target" class="hidden" aria-hidden="true"><span></span></div>
       <button id="annotation-basket" class="hidden" draggable="true" type="button" data-action="open-annotation-basket" aria-live="polite"></button>
       <div id="interaction-layer" aria-live="off"></div>
+      <div id="morph-ghost" class="hidden" aria-hidden="true"></div>
       <section id="panel" class="surface hidden" role="dialog" aria-modal="false" aria-label="${escapeHtml(t("app.dialogLabel", currentLanguage()))}"></section>
       <div id="toast" class="hidden"></div>
     `;
@@ -981,6 +1030,7 @@
     historyHint = shadow.getElementById("history-hint");
     historyHintLine = shadow.getElementById("history-hint-line");
     annotationBasket = shadow.getElementById("annotation-basket");
+    morphGhost = shadow.getElementById("morph-ghost");
     annotationHighlightLayer = shadow.getElementById("annotation-highlight-layer");
     editorDropTarget = shadow.getElementById("editor-drop-target");
     fullUiReady = true;
@@ -1064,6 +1114,7 @@
   function closeInteractionPanel(value = activePanelId) {
     const instance = getInteractionPanel(value);
     if (!instance) return;
+    if (instance.root.classList.contains("morph-pending")) cancelMorph();
     try {
       instance.port?.disconnect();
     } catch (_) {
@@ -1127,7 +1178,7 @@
     syncHoverListener();
     chrome.runtime.onMessage.addListener((message) => {
       if (message?.type === MESSAGE_TYPES.showReady) {
-        showToast(t("content.readyToast", currentLanguage()));
+        showToast(readyToastLabel());
       } else if (message?.type === MESSAGE_TYPES.openMemory) {
         const memory = memories[message.memoryId];
         if (memory) {
@@ -1256,9 +1307,7 @@
     };
 
     bubble.classList.remove("hidden");
-    bubble.title = selectionState.memories.length
-      ? t("content.bubbleExistingTitle", currentLanguage())
-      : t("content.bubbleTitle", currentLanguage());
+    bubble.title = bubbleActionLabel();
     bubble.setAttribute("aria-label", bubble.title);
     positionElement(bubble, selectionState.rect, { mode: "bubble" });
   }
@@ -1325,6 +1374,9 @@
     if (!action) {
       const header = event.target?.closest?.(".surface-header");
       if (header && !event.target?.closest?.("button,select")) {
+        if (header.closest(".annotation-drawer")) {
+          return;
+        }
         if (suppressPanelHeaderClick) {
           suppressPanelHeaderClick = false;
           return;
@@ -1449,6 +1501,9 @@
     }
 
     const surface = header.closest(".surface") || interactionStack;
+    if (surface?.classList.contains("annotation-drawer")) {
+      return;
+    }
     const motionTarget = surface.closest(".interaction-stack") || surface;
     const rect = motionTarget.getBoundingClientRect();
     dragState = {
@@ -1541,7 +1596,7 @@
     window.clearTimeout(handleBubblePointerDown.timer);
     bubblePressState = {
       pointerId: event.pointerId,
-      longPressOpened: false
+      longPressHandled: false
     };
     try {
       bubble.setPointerCapture?.(event.pointerId);
@@ -1556,9 +1611,9 @@
       if (!bubblePressState || bubblePressState.pointerId !== event.pointerId) {
         return;
       }
-      bubblePressState.longPressOpened = true;
+      bubblePressState.longPressHandled = true;
       const promptAnchor = rectToObject(bubble.getBoundingClientRect());
-      openCustomQuestionPanel(promptAnchor);
+      triggerBubbleAction(selectionActionForGesture(settings, "long"), promptAnchor);
     }, LONG_PRESS_MS);
   }
 
@@ -1566,11 +1621,11 @@
     const state = bubblePressState;
     cancelBubblePress(event);
 
-    if (!state || state.longPressOpened) {
+    if (!state || state.longPressHandled) {
       return;
     }
 
-    explainSelectionFromDot();
+    triggerBubbleAction(selectionActionForGesture(settings, "short"), rectToObject(bubble.getBoundingClientRect()));
   }
 
   function cancelBubblePress(event) {
@@ -1591,15 +1646,24 @@
       return;
     }
 
+    const originRect = rectToObject(bubble.getBoundingClientRect());
     const instance = prepareTemporaryPanelState();
     hideBubble();
     panelState.pendingQueryKind = "default";
     panelState.pendingQuery = defaultQuestionFor(panelState.term);
     renderAnswerPanel({ loading: true });
     showPanel(selectionState.rect, instance);
-    window.setTimeout(() => {
+    morphInteractionFrom(originRect, instance, "answer", () => {
       sendQuestion({ questionOverride: instance.state.pendingQuery, followup: false, queryKind: "default", instance });
-    }, 30);
+    });
+  }
+
+  function triggerBubbleAction(action, anchorRect) {
+    if (action === "compose") {
+      openCustomQuestionPanel(anchorRect);
+      return;
+    }
+    explainSelectionFromDot();
   }
 
   function openCustomQuestionPanel(anchorRect) {
@@ -1607,11 +1671,109 @@
       return;
     }
 
+    const originRect = rectToObject(bubble.getBoundingClientRect());
     const instance = prepareTemporaryPanelState();
     hideBubble();
     suppressOutsideCloseUntil = Date.now() + 350;
-    renderQuestionPanel();
+    renderQuestionPanel(instance, { focus: false });
     showPanel(anchorRect || selectionState.rect, instance);
+    morphInteractionFrom(originRect, instance, "composer", () => focusQuestionSoon(instance));
+  }
+
+  function morphInteractionFrom(originRect, instance, kind, onComplete) {
+    const target = kind === "composer" ? instance?.composerSurface : instance?.answerSurface;
+    if (!instance?.root || !target) {
+      onComplete?.();
+      return;
+    }
+
+    instance.root.classList.add("morph-pending");
+    window.requestAnimationFrame(() => {
+      const targetRect = rectToObject(target.getBoundingClientRect());
+      animateMorph(originRect, targetRect, kind, () => {
+        instance.root.classList.remove("morph-pending");
+        instance.root.classList.add("morph-reveal");
+        window.setTimeout(() => instance.root.classList.remove("morph-reveal"), 160);
+        onComplete?.();
+      });
+    });
+  }
+
+  function animateMorph(originRect, targetRect, kind, onComplete) {
+    cancelMorph();
+    if (!morphGhost || !originRect || !targetRect || prefersReducedMotion()) {
+      onComplete?.();
+      return;
+    }
+
+    const start = normalizeMorphRect(originRect);
+    const end = normalizeMorphRect(targetRect);
+    morphGhost.className = kind;
+    morphGhost.classList.remove("hidden");
+    applyMorphRect(start, kind === "drawer" ? "999px" : "50%");
+    const animation = morphGhost.animate([
+      morphFrame(start, kind === "drawer" ? "999px" : "50%", 1),
+      morphFrame(end, morphRadiusFor(kind), 1)
+    ], {
+      duration: 260,
+      easing: "cubic-bezier(.2, .8, .2, 1)",
+      fill: "forwards"
+    });
+    morphAnimation = animation;
+    animation.finished.catch(() => {}).then(() => {
+      if (morphAnimation !== animation) return;
+      morphGhost.classList.add("hidden");
+      morphGhost.className = "hidden";
+      animation.cancel();
+      morphAnimation = null;
+      onComplete?.();
+    });
+  }
+
+  function cancelMorph() {
+    if (morphAnimation) {
+      morphAnimation.cancel();
+      morphAnimation = null;
+    }
+    morphGhost?.getAnimations?.().forEach((animation) => animation.cancel());
+    morphGhost?.classList.add("hidden");
+  }
+
+  function prefersReducedMotion() {
+    return window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+  }
+
+  function normalizeMorphRect(rect) {
+    const width = Math.max(1, Number(rect?.width) || Number(rect?.right) - Number(rect?.left) || 1);
+    const height = Math.max(1, Number(rect?.height) || Number(rect?.bottom) - Number(rect?.top) || 1);
+    return {
+      left: Number(rect?.left) || 0,
+      top: Number(rect?.top) || 0,
+      width,
+      height
+    };
+  }
+
+  function morphRadiusFor(kind) {
+    if (kind === "drawer") return "18px";
+    if (kind === "answer") return "26px";
+    return "999px";
+  }
+
+  function morphFrame(rect, borderRadius, opacity) {
+    return {
+      left: `${Math.round(rect.left)}px`,
+      top: `${Math.round(rect.top)}px`,
+      width: `${Math.round(rect.width)}px`,
+      height: `${Math.round(rect.height)}px`,
+      borderRadius,
+      opacity
+    };
+  }
+
+  function applyMorphRect(rect, borderRadius) {
+    if (!morphGhost) return;
+    Object.assign(morphGhost.style, morphFrame(rect, borderRadius, 1));
   }
 
   function scheduleHistoryHint(event) {
@@ -1838,12 +2000,12 @@
     });
   }
 
-  function renderQuestionPanel(instance = getInteractionPanel()) {
+  function renderQuestionPanel(instance = getInteractionPanel(), { focus = true } = {}) {
     if (!activateInteractionPanel(instance)) return;
     panelState.mode = "inputReady";
     showInteractionSurfaces({ answer: false, composer: true });
     renderComposerSurface({ followup: false, annotation: true });
-    focusQuestionSoon();
+    if (focus) focusQuestionSoon(instance);
   }
 
   function renderAnswerPanel({ loading = Boolean(panelState?.streaming), instance = getInteractionPanel() } = {}) {
@@ -1983,7 +2145,7 @@
         </div>
       </header>
       <div class="surface-body">${body}</div>
-      ${resizeHandles()}
+      ${options.resizable === false ? "" : resizeHandles()}
     `;
   }
 
@@ -2715,9 +2877,12 @@
   }
 
   function closeAnnotationPanel() {
+    const wasDrawer = panel?.classList.contains("annotation-drawer");
+    cancelMorph();
     panel?.classList.add("hidden");
-    panel?.classList.remove("collapsed");
+    panel?.classList.remove("collapsed", "annotation-drawer", "morph-pending");
     annotationPanelState = { collapsed: false, editingAnnotationId: "", open: false };
+    if (wasDrawer) renderAnnotationBasket(false);
   }
 
   function hideBubble() {
@@ -2907,6 +3072,24 @@
     return String(settings.defaultQuestion || "").replaceAll("{{term}}", term);
   }
 
+  function bubbleActionLabel() {
+    return t(
+      settings.selectionActionPriority === "annotationFirst"
+        ? "content.bubbleAnnotationFirstTitle"
+        : "content.bubbleExplanationFirstTitle",
+      currentLanguage()
+    );
+  }
+
+  function readyToastLabel() {
+    return t(
+      settings.selectionActionPriority === "annotationFirst"
+        ? "content.readyToastAnnotationFirst"
+        : "content.readyToastExplanationFirst",
+      currentLanguage()
+    );
+  }
+
   function formatContextBlock(context) {
     if (!settings.includePageContext || !context || (!context.before && !context.after)) {
       return "";
@@ -2924,9 +3107,7 @@
     }
     host.style.setProperty("--iai-waiting-text", JSON.stringify(t("content.waiting", currentLanguage())));
     if (bubble) {
-      const bubbleLabel = selectionState?.memories?.length
-        ? t("content.bubbleExistingTitle", currentLanguage())
-        : t("content.bubbleTitle", currentLanguage());
+      const bubbleLabel = bubbleActionLabel();
       bubble.title = bubbleLabel;
       bubble.setAttribute("aria-label", bubbleLabel);
     }
@@ -3148,9 +3329,22 @@
 
   function openAnnotationPanel(annotationId) {
     if (!activeAnnotationBatch?.items?.length) return;
+    const originRect = annotationBasket && !annotationBasket.classList.contains("hidden")
+      ? rectToObject(annotationBasket.getBoundingClientRect())
+      : null;
     annotationPanelState = { mode: "annotations", editingAnnotationId: annotationId || "", collapsed: false, open: true };
     renderAnnotationPanel(annotationId || "");
-    showPanel({ left: Math.max(12, innerWidth - 560), right: innerWidth - 16, top: Math.max(24, innerHeight - 500), bottom: innerHeight - 24, width: 520, height: 32 });
+    panel.classList.add("annotation-drawer", "morph-pending");
+    panel.classList.remove("hidden");
+    panel.style.removeProperty("left");
+    panel.style.removeProperty("top");
+    panel.style.removeProperty("width");
+    panel.style.removeProperty("height");
+    annotationBasket?.classList.add("hidden");
+    window.requestAnimationFrame(() => {
+      const targetRect = rectToObject(panel.getBoundingClientRect());
+      animateMorph(originRect, targetRect, "drawer", () => panel.classList.remove("morph-pending"));
+    });
   }
 
   function renderAnnotationPanel(editingId) {
@@ -3167,12 +3361,12 @@
         ${editing ? `<textarea class="annotation-edit-area" data-annotation-edit="${escapeHtml(item.id)}" maxlength="${LIMITS.maxAnnotationNoteLength}" aria-label="${escapeHtml(t("content.annotationEdit", currentLanguage()))}">${escapeHtml(item.note)}</textarea>` : `<button class="annotation-note-button" type="button" data-action="edit-annotation" data-annotation-id="${escapeHtml(item.id)}">${escapeHtml(item.note)}</button>`}
       </article>`;
     }).join("");
-    panel.className = `${panelClass()} annotation-panel`;
+    panel.className = `${panelClass()} annotation-panel annotation-drawer`;
     panel.innerHTML = surfaceShell(t("content.annotationPanelTitle", { count: items.length }, currentLanguage()), "", `
       ${info.tooLong ? `<div class="notice error">${escapeHtml(t("content.annotationTooLong", currentLanguage()))}</div>` : ""}
       <div class="annotation-list">${cards}</div>
       <div class="annotation-footer"><button class="button primary" type="button" data-action="copy-annotation-batch" ${info.tooLong ? "disabled" : ""}>${escapeHtml(t("content.annotationCopyAll", currentLanguage()))}</button></div>
-    `, { closeAction: "close-annotation-panel" });
+    `, { closeAction: "close-annotation-panel", resizable: false });
     if (editingId) window.setTimeout(() => {
       const editor = findAnnotationEditArea(editingId);
       editor?.focus();

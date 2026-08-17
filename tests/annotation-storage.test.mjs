@@ -26,6 +26,7 @@ test("migrates schema 1 to 4 while preserving settings and memories", async () =
   await C.ensureStorageSchema(area);
   assert.equal(area.data.inlineai_schema_version, 4);
   assert.equal(area.data.inlineai_settings.model, "keep");
+  assert.equal(area.data.inlineai_settings.selectionActionPriority, "explanationFirst");
   assert.equal(area.data.inlineai_memories.m1.id, "m1");
   assert.deepEqual(area.data.inlineai_annotation_batches, {});
   assert.deepEqual(area.data.inlineai_active_annotation_batches, {});
@@ -99,4 +100,16 @@ test("preserves all five curated theme presets", () => {
       assert.ok(preset[key], `${preset.id} is missing ${key}`);
     }
   }
+});
+
+test("defaults and normalizes the selection action priority", () => {
+  const C = loadConstants();
+  assert.equal(C.DEFAULT_SETTINGS.selectionActionPriority, C.SELECTION_ACTION_PRIORITIES.explanationFirst);
+  assert.equal(C.mergeSettings({}).selectionActionPriority, "explanationFirst");
+  assert.equal(C.mergeSettings({ selectionActionPriority: "annotationFirst" }).selectionActionPriority, "annotationFirst");
+  assert.equal(C.mergeSettings({ selectionActionPriority: "unexpected" }).selectionActionPriority, "explanationFirst");
+  assert.equal(C.selectionActionForGesture({ selectionActionPriority: "explanationFirst" }, "short"), "explain");
+  assert.equal(C.selectionActionForGesture({ selectionActionPriority: "explanationFirst" }, "long"), "compose");
+  assert.equal(C.selectionActionForGesture({ selectionActionPriority: "annotationFirst" }, "short"), "compose");
+  assert.equal(C.selectionActionForGesture({ selectionActionPriority: "annotationFirst" }, "long"), "explain");
 });
