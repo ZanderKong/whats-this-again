@@ -101,6 +101,23 @@ test("settings removes arbitrary color input but keeps preset controls", () => {
   assert.match(options, /id="open-onboarding"/);
 });
 
+test("selection action priority is available in settings and the popup", () => {
+  const content = readFileSync("src/content/content.js", "utf8");
+  const options = readFileSync("src/options/options.html", "utf8");
+  const optionsScript = readFileSync("src/options/options.js", "utf8");
+  const popup = readFileSync("src/popup/popup.html", "utf8");
+  const popupScript = readFileSync("src/popup/popup.js", "utf8");
+  assert.match(options, /name="selectionActionPriority" value="explanationFirst"/);
+  assert.match(options, /name="selectionActionPriority" value="annotationFirst"/);
+  assert.match(optionsScript, /selectionActionPriority: fields\.selectionActionPriority\.value/);
+  assert.match(popup, /id="action-priority"/);
+  assert.match(popup, /data-action-priority="annotationFirst"/);
+  assert.match(popupScript, /function setActionPriority\(event\)/);
+  assert.match(content, /selectionActionForGesture\(settings, "long"\)/);
+  assert.match(content, /selectionActionForGesture\(settings, "short"\)/);
+  assert.match(content, /function triggerBubbleAction\(action, anchorRect\)/);
+});
+
 test("onboarding exposes keyboard-focusable headings and live status", () => {
   const onboarding = readFileSync("src/onboarding/onboarding.html", "utf8");
   assert.match(onboarding, /id="step-title" tabindex="-1"/);
@@ -118,8 +135,53 @@ test("popup uses the compact paper layout without record counters", () => {
   assert.match(popup, /id="api-state"/);
   assert.doesNotMatch(popup, /memory-count|annotation-count|class="meta"/);
   assert.doesNotMatch(script, /memoryCount|annotationCount|STORAGE_KEYS\.memories/);
-  assert.match(css, /--paper: #fdfaf0/);
+  assert.match(css, /--paper: color-mix\(in srgb, var\(--accent\) 3%, #fffdf9\)/);
   assert.match(css, /\.theme-section/);
+});
+
+test("settings uses a navigation rail and the popup keeps a compact two-column action grid", () => {
+  const options = readFileSync("src/options/options.html", "utf8");
+  const popup = readFileSync("src/popup/popup.html", "utf8");
+  const optionsCss = readFileSync("src/options/options.css", "utf8");
+  const popupCss = readFileSync("src/popup/popup.css", "utf8");
+  assert.match(options, /class="settings-nav"/);
+  assert.match(options, /class="settings-content"/);
+  assert.match(options, /href="#connection"/);
+  assert.match(options, /href="#connection" aria-current="location"/);
+  assert.match(optionsCss, /grid-template-columns: 190px minmax\(0, 1fr\)/);
+  assert.match(optionsCss, /\.settings-nav \{ position: sticky/);
+  assert.match(optionsCss, /a\[aria-current="location"\]::after/);
+  assert.match(optionsCss, /width: min\(742px, 100%\)/);
+  assert.match(options, /<section class="section connection-section" id="connection">/);
+  assert.match(options, /class="action-card"/);
+  assert.match(optionsCss, /\.connection-fields/);
+  assert.match(popupCss, /\.actions \{ display: grid; grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/);
+  assert.match(popupCss, /\.priority-options \{ display: grid;/);
+  assert.match(popupCss, /\.toggle-switch/);
+  assert.match(popupCss, /--canvas: color-mix\(in srgb, var\(--accent\) 8%, #f3f0e9\)/);
+  assert.match(optionsCss, /--canvas: color-mix\(in srgb, var\(--accent\) 8%, #f3f0e9\)/);
+  assert.match(popup, /class="toggle-switch(?: is-on)?"/);
+  assert.match(popup, /class="priority-option"/);
+  assert.match(popupCss, /\.swatch\.active \{ box-shadow: none; transform: scale\(1\.16\); \}/);
+});
+
+test("selection surfaces morph from the dot and annotations use a fixed right drawer", () => {
+  const content = readFileSync("src/content/content.js", "utf8");
+  const optionsScript = readFileSync("src/options/options.js", "utf8");
+  assert.match(content, /id="morph-ghost"/);
+  assert.match(content, /function morphInteractionFrom\(originRect, instance, kind, onComplete\)/);
+  assert.match(content, /function animateMorph\(originRect, targetRect, kind, onComplete\)/);
+  assert.match(content, /morphInteractionFrom\(originRect, instance, "answer"/);
+  assert.match(content, /morphInteractionFrom\(originRect, instance, "composer"/);
+  assert.match(content, /selectionActionForGesture\(settings, "long"\)/);
+  assert.match(content, /selectionActionForGesture\(settings, "short"\)/);
+  assert.match(content, /annotation-drawer/);
+  assert.match(content, /animateMorph\(originRect, targetRect, "drawer"/);
+  assert.match(content, /prefers-reduced-motion: reduce/);
+  assert.match(optionsScript, /function bindSettingsNavigation\(\)/);
+  assert.match(optionsScript, /new IntersectionObserver/);
+  assert.match(optionsScript, /aria-current/);
+  assert.doesNotMatch(optionsScript, /\.open = true/);
 });
 
 test("history uses pill filters and expandable cards for answers and annotations", () => {

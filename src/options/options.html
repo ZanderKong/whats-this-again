@@ -11,94 +11,71 @@
       <header class="hero">
         <div>
           <p class="eyebrow" data-i18n="app.name">这是啥来着</p>
-          <h1 data-i18n="app.subtitle">记忆式阅读助手</h1>
+          <h1 data-i18n="options.settingsHeading">设置</h1>
+          <p class="hero-description" data-i18n="options.settingsDescription">管理模型、提问方式和本地记录。</p>
         </div>
         <p class="status" id="status" role="status" aria-live="polite" data-i18n="options.statusReady">已生效</p>
       </header>
 
       <form id="settings-form" class="grid">
-        <section class="section">
-          <h2 data-i18n="options.api">API</h2>
-          <label>
-            <span data-i18n="options.modelProvider">模型提供商</span>
-            <select id="modelProvider" name="modelProvider" data-connection-field="modelProvider"></select>
-          </label>
-          <label>
-            API Base URL
-            <input id="apiBaseUrl" name="apiBaseUrl" type="url" placeholder="https://api.deepseek.com/v1" autocomplete="off" data-connection-field="apiBaseUrl">
-          </label>
-          <label>
-            API Key
-            <input id="apiKey" name="apiKey" type="password" placeholder="sk-..." autocomplete="off" data-connection-field="apiKey">
-          </label>
-          <label>
-            Model
-            <input id="model" name="model" type="text" list="model-list" placeholder="deepseek-chat" autocomplete="off" data-connection-field="model">
-            <datalist id="model-list" data-connection-model-list></datalist>
-          </label>
-          <div class="actions">
-            <button class="button primary" type="submit" data-i18n="options.saveSettings">保存设置</button>
-            <button class="button" id="refresh-models" type="button" data-i18n="options.refreshModels" data-connection-action="refresh-models">刷新模型列表</button>
-            <button class="button" id="test-api" type="button" data-i18n="options.testConnection" data-connection-action="test">测试连接</button>
-          </div>
-          <p class="hint" data-i18n="options.apiHint">拉不到模型列表时，仍可直接手动填写 OpenAI-compatible 模型名。本地 Ollama/LM Studio 可以留空 API Key。</p>
-          <p class="hint" data-i18n="options.privacyNotice">隐私提示：点击解释会把选中文本、问题和现有页面上下文发送到你配置的模型服务。API Key、历史解释和批注保存在浏览器本地；请不要选择敏感内容，并遵守该服务的隐私政策。</p>
-        </section>
+        <aside class="settings-nav" aria-label="设置导航" data-i18n-aria-label="options.navigation">
+          <p class="nav-kicker" data-i18n="options.localSettings">本地设置</p>
+          <nav>
+            <a href="#connection" aria-current="location" data-i18n="options.navConnection">连接与模型</a>
+            <a href="#question" data-i18n="options.navQuestion">提问方式</a>
+            <a href="#memory" data-i18n="options.navMemory">记忆与提醒</a>
+            <a href="#appearance" data-i18n="options.navTheme">外观</a>
+            <a href="#help" data-i18n="options.navHelp">帮助</a>
+            <a href="#local-data" data-i18n="options.navData">本地数据</a>
+          </nav>
+          <p class="nav-note" data-i18n-html="options.localOnlyNote">「这是啥来着」<br>所有设置仅保存在当前浏览器。</p>
+        </aside>
 
-        <section class="section">
-          <h2 data-i18n="options.question">提问</h2>
-          <label>
-            <span data-i18n="options.language">语言</span>
-            <select id="language" name="language"></select>
-          </label>
-          <label>
-            <span data-i18n="options.defaultPrompt">默认 Prompt</span>
-            <textarea id="defaultQuestion" name="defaultQuestion" rows="5" data-i18n-placeholder="options.defaultPrompt" readonly></textarea>
-          </label>
-          <p class="hint" data-i18n-html="options.promptHint">可使用 <code>{{term}}</code> 代表划线内容。</p>
-          <label class="choice">
-            <input id="includePageContext" name="includePageContext" type="checkbox">
-            <span data-i18n="options.includeContext">划线提问时附带选区前后上下文</span>
-          </label>
-        </section>
+        <div class="settings-content">
+          <section class="section connection-section" id="connection">
+            <header class="section-heading"><p data-i18n="options.navConnection">连接与模型</p><h2 data-i18n="options.api">API</h2></header>
+            <div class="connection-fields">
+              <label><span data-i18n="options.modelProvider">模型提供商</span><select id="modelProvider" name="modelProvider" data-connection-field="modelProvider"></select></label>
+              <label>API Base URL<input id="apiBaseUrl" name="apiBaseUrl" type="url" placeholder="https://api.deepseek.com/v1" autocomplete="off" data-connection-field="apiBaseUrl"></label>
+              <label>API Key<input id="apiKey" name="apiKey" type="password" placeholder="sk-..." autocomplete="off" data-connection-field="apiKey"></label>
+              <label>Model<input id="model" name="model" type="text" list="model-list" placeholder="deepseek-chat" autocomplete="off" data-connection-field="model"><datalist id="model-list" data-connection-model-list></datalist></label>
+            </div>
+            <div class="actions"><button class="button primary" type="submit" data-i18n="options.saveSettings">保存设置</button><button class="button" id="refresh-models" type="button" data-i18n="options.refreshModels" data-connection-action="refresh-models">刷新模型列表</button><button class="button" id="test-api" type="button" data-i18n="options.testConnection" data-connection-action="test">测试连接</button></div>
+            <p class="hint" data-i18n="options.apiHint">拉不到模型列表时，仍可直接手动填写 OpenAI-compatible 模型名。本地 Ollama/LM Studio 可以留空 API Key。</p>
+            <p class="hint notice" data-i18n="options.privacyNotice">隐私提示：点击解释会把选中文本、问题和现有页面上下文发送到你配置的模型服务。API Key、历史解释和批注保存在浏览器本地；请不要选择敏感内容，并遵守该服务的隐私政策。</p>
+          </section>
 
-        <section class="section">
-          <h2 data-i18n="options.memoryRules">记忆规则</h2>
-          <label>
-            <span data-i18n="options.defaultSaveScope">默认保存范围</span>
-            <select id="defaultSaveScope" name="defaultSaveScope"></select>
-          </label>
-          <label class="choice">
-            <input id="hideReminders" name="hideReminders" type="checkbox">
-            <span data-i18n="options.hideReminders">临时隐藏历史悬浮提醒</span>
-          </label>
-        </section>
+          <section class="section" id="question">
+            <header class="section-heading"><p data-i18n="options.navQuestion">提问方式</p><h2 data-i18n="options.question">提问</h2></header>
+            <label><span data-i18n="options.language">语言</span><select id="language" name="language"></select></label>
+            <label><span data-i18n="options.defaultPrompt">默认 Prompt</span><textarea id="defaultQuestion" name="defaultQuestion" rows="5" data-i18n-placeholder="options.defaultPrompt" readonly></textarea></label>
+            <p class="hint" data-i18n-html="options.promptHint">可使用 <code>{{term}}</code> 代表划线内容。</p>
+            <fieldset class="action-priority"><legend data-i18n="options.actionPriority">圆点操作优先级</legend><label class="priority-choice"><input type="radio" name="selectionActionPriority" value="explanationFirst"><span><strong data-i18n="options.explanationFirst">解释优先</strong><small data-i18n="options.explanationFirstHint">点击直接解释选中文字；长按打开自定义提问或批注。</small></span></label><label class="priority-choice"><input type="radio" name="selectionActionPriority" value="annotationFirst"><span><strong data-i18n="options.annotationFirst">批注优先</strong><small data-i18n="options.annotationFirstHint">点击打开自定义提问或批注；长按直接解释选中文字。</small></span></label></fieldset>
+            <label class="choice"><input id="includePageContext" name="includePageContext" type="checkbox"><span data-i18n="options.includeContext">划线提问时附带选区前后上下文</span></label>
+          </section>
 
-        <section class="section">
-          <h2 data-i18n="options.theme">主题色</h2>
-          <div class="color-control">
-            <span data-i18n="options.theme">主题色</span>
-            <div id="theme-presets" class="swatches" data-i18n-aria-label="popup.themeColorAria" aria-label="主题色预设"></div>
-          </div>
-          <p class="hint" data-i18n="options.themeHint">主题色会同步到圆点、输入框、回答框和工具栏弹窗。</p>
-        </section>
+          <section class="section" id="memory">
+            <header class="section-heading"><p data-i18n="options.navMemory">记忆与提醒</p><h2 data-i18n="options.memoryRules">记忆规则</h2></header>
+            <label><span data-i18n="options.defaultSaveScope">默认保存范围</span><select id="defaultSaveScope" name="defaultSaveScope"></select></label>
+            <label class="choice"><input id="hideReminders" name="hideReminders" type="checkbox"><span data-i18n="options.hideReminders">临时隐藏历史悬浮提醒</span></label>
+          </section>
 
-        <section class="section">
-          <h2 data-i18n="options.help">帮助</h2>
-          <button class="button" id="open-onboarding" type="button" data-i18n="options.reopenOnboarding">重新查看快速教程</button>
-        </section>
+          <section class="section" id="appearance">
+            <header class="section-heading"><p data-i18n="options.navTheme">外观</p><h2 data-i18n="options.theme">主题色</h2></header>
+            <div class="color-control"><span data-i18n="options.theme">主题色</span><div id="theme-presets" class="swatches" data-i18n-aria-label="popup.themeColorAria" aria-label="主题色预设"></div></div>
+            <p class="hint" data-i18n="options.themeHint">主题色会同步到圆点、输入框、回答框和工具栏弹窗。</p>
+          </section>
 
-        <section class="section danger-zone">
-          <h2 data-i18n="options.historyData">历史数据</h2>
-          <p id="memory-count" class="hint" data-i18n="options.memoryInitial">已保存 0 条记忆。</p>
-          <p id="annotation-count" class="hint">已保存 0 个批注批次。</p>
-          <div class="actions">
-            <button class="button" id="open-history" type="button" data-i18n="options.openExplanationHistory">查看历史解释</button>
-            <button class="button" id="open-annotation-history" type="button" data-i18n="options.openAnnotationHistory">查看历史批注</button>
-          </div>
-          <button class="button danger" id="clear-memories" type="button" data-i18n="options.clearMemories">清空所有历史记忆</button>
-          <button class="button danger" id="clear-annotations" type="button" data-i18n="options.clearAnnotations">清空历史批注</button>
-        </section>
+          <section class="section" id="help">
+            <header class="section-heading"><p data-i18n="options.navHelp">帮助</p><h2 data-i18n="options.help">帮助</h2></header>
+            <article class="action-card"><div><h3 data-i18n="options.reopenOnboarding">重新查看快速教程</h3><p data-i18n="options.helpDescription">重新查看使用说明与快捷操作。</p></div><button class="button" id="open-onboarding" type="button" data-i18n="options.reopenOnboarding">重新查看快速教程</button></article>
+          </section>
+
+          <section class="section" id="local-data">
+            <header class="section-heading"><p data-i18n="options.navData">本地数据</p><h2 data-i18n="options.historyData">历史数据</h2></header>
+            <div class="action-cards"><article class="action-card"><div><h3 data-i18n="options.explanationHistoryTitle">解释记录</h3><p id="memory-count" data-i18n="options.memoryInitial">已保存 0 条记忆。</p></div><div class="actions"><button class="button" id="open-history" type="button" data-i18n="options.openExplanationHistory">查看历史解释</button><button class="button danger" id="clear-memories" type="button" data-i18n="options.clearMemories">清空历史解释</button></div></article><article class="action-card"><div><h3 data-i18n="options.annotationHistoryTitle">批注记录</h3><p id="annotation-count">已保存 0 个批注批次。</p></div><div class="actions"><button class="button" id="open-annotation-history" type="button" data-i18n="options.openAnnotationHistory">查看历史批注</button><button class="button danger" id="clear-annotations" type="button" data-i18n="options.clearAnnotations">清空历史批注</button></div></article></div>
+          </section>
+        </div>
       </form>
     </main>
 

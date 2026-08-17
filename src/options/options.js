@@ -23,6 +23,10 @@
   const memoryCount = document.getElementById("memory-count");
   const annotationCount = document.getElementById("annotation-count");
   const themePresets = document.getElementById("theme-presets");
+  const navigationLinks = Array.from(document.querySelectorAll(".settings-nav a[href^='#']"));
+  const settingsSections = navigationLinks
+    .map((link) => document.querySelector(link.getAttribute("href")))
+    .filter(Boolean);
   const fields = {
     modelProvider: document.getElementById("modelProvider"),
     apiBaseUrl: document.getElementById("apiBaseUrl"),
@@ -30,6 +34,7 @@
     model: document.getElementById("model"),
     language: document.getElementById("language"),
     defaultQuestion: document.getElementById("defaultQuestion"),
+    selectionActionPriority: form.elements.selectionActionPriority,
     includePageContext: document.getElementById("includePageContext"),
     defaultSaveScope: document.getElementById("defaultSaveScope"),
     hideReminders: document.getElementById("hideReminders")
@@ -67,6 +72,7 @@
     });
     renderForm();
     renderMemoryCount();
+    bindSettingsNavigation();
 
     form.addEventListener("submit", handleSave);
     form.addEventListener("input", handleFormChange);
@@ -105,6 +111,43 @@
     });
   }
 
+  function bindSettingsNavigation() {
+    if (!navigationLinks.length || !settingsSections.length) {
+      return;
+    }
+
+    const setActiveSection = (id) => {
+      navigationLinks.forEach((link) => {
+        const active = link.getAttribute("href") === `#${id}`;
+        link.toggleAttribute("aria-current", active);
+        if (active) link.setAttribute("aria-current", "location");
+      });
+    };
+
+    let initialId = location.hash.slice(1);
+    try {
+      initialId = decodeURIComponent(initialId);
+    } catch (_) {
+      initialId = "";
+    }
+    setActiveSection(settingsSections.some((section) => section.id === initialId) ? initialId : settingsSections[0].id);
+
+    navigationLinks.forEach((link) => {
+      link.addEventListener("click", () => {
+        const id = link.getAttribute("href").slice(1);
+        setActiveSection(id);
+      });
+    });
+
+    const observer = new IntersectionObserver((entries) => {
+      const visible = entries
+        .filter((entry) => entry.isIntersecting)
+        .sort((left, right) => right.intersectionRatio - left.intersectionRatio)[0];
+      if (visible) setActiveSection(visible.target.id);
+    }, { rootMargin: "-12% 0px -68% 0px", threshold: [0.01, 0.35, 0.7] });
+    settingsSections.forEach((section) => observer.observe(section));
+  }
+
   function renderSelectOptions() {
     const language = currentLanguage();
     fields.language.innerHTML = Object.values(LANGUAGES)
@@ -129,6 +172,7 @@
     fields.language.value = currentSettings.language;
     fields.defaultQuestion.value = currentSettings.defaultQuestion;
     fields.defaultQuestion.placeholder = getDefaultQuestion(currentSettings.language);
+    fields.selectionActionPriority.value = currentSettings.selectionActionPriority;
     fields.includePageContext.checked = currentSettings.includePageContext !== false;
     fields.defaultSaveScope.value = currentSettings.defaultSaveScope;
     fields.hideReminders.checked = Boolean(currentSettings.hideReminders);
@@ -147,6 +191,7 @@
       model: fields.model.value.trim(),
       language,
       defaultQuestion: getDefaultQuestion(language),
+      selectionActionPriority: fields.selectionActionPriority.value,
       includePageContext: fields.includePageContext.checked,
       defaultSaveScope: fields.defaultSaveScope.value,
       hideReminders: fields.hideReminders.checked,

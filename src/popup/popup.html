@@ -23,10 +23,21 @@
 
       <div class="actions">
         <button class="button primary" id="refresh-page" type="button" data-i18n="popup.refresh">注入插件 / 刷新</button>
-        <button class="button" id="toggle-highlights" type="button" data-i18n="popup.hideReminders">隐藏提醒</button>
+        <div class="reminder-control">
+          <span><strong data-i18n="popup.reminderVisibility">历史提醒</strong><small id="reminder-state" data-i18n="popup.remindersVisible">显示中</small></span>
+          <button class="toggle-switch is-on" id="toggle-highlights" type="button" role="switch" aria-checked="true" data-i18n-aria-label="popup.reminderToggleAria" aria-label="切换历史提醒显示状态"><span aria-hidden="true"></span></button>
+        </div>
         <button class="button" id="open-options" type="button" data-i18n="popup.settings">设置</button>
         <button class="button" id="open-history" type="button" data-i18n="popup.history">历史记录</button>
       </div>
+
+      <section class="priority-section" aria-labelledby="action-priority-label">
+        <div class="section-heading"><span id="action-priority-label" data-i18n="popup.actionPriority">圆点操作</span><small data-i18n="options.actionPriority">圆点操作优先级</small></div>
+        <div id="action-priority" class="priority-options" role="group" data-i18n-aria-label="popup.actionPriorityAria" aria-label="圆点操作优先级">
+          <button class="priority-option" type="button" data-action-priority="explanationFirst"><span><strong data-i18n="popup.explanationFirst">解释优先</strong><small data-i18n="options.explanationFirstHint">点击直接解释选中文字；长按打开自定义提问或批注。</small></span></button>
+          <button class="priority-option" type="button" data-action-priority="annotationFirst"><span><strong data-i18n="popup.annotationFirst">批注优先</strong><small data-i18n="options.annotationFirstHint">点击打开自定义提问或批注；长按直接解释选中文字。</small></span></button>
+        </div>
+      </section>
 
       <section class="theme-section" data-i18n-aria-label="popup.themeColorAria" aria-label="快速选择主题色">
         <span data-i18n="popup.themeColor">主题色</span>

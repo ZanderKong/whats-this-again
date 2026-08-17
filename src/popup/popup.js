@@ -20,8 +20,10 @@
     status: document.getElementById("status"),
     refreshPage: document.getElementById("refresh-page"),
     toggleHighlights: document.getElementById("toggle-highlights"),
+    reminderState: document.getElementById("reminder-state"),
     openOptions: document.getElementById("open-options"),
     openHistory: document.getElementById("open-history"),
+    actionPriority: document.getElementById("action-priority"),
     themePresets: document.getElementById("theme-presets"),
     apiState: document.getElementById("api-state")
   };
@@ -44,9 +46,17 @@
     render();
     els.refreshPage.addEventListener("click", refreshCurrentPage);
     els.toggleHighlights.addEventListener("click", toggleHighlights);
+    els.actionPriority.addEventListener("click", setActionPriority);
     els.themePresets.addEventListener("click", handlePresetClick);
     els.openOptions.addEventListener("click", () => chrome.runtime.openOptionsPage());
     els.openHistory.addEventListener("click", openHistoryPage);
+    chrome.storage.onChanged.addListener((changes, areaName) => {
+      if (areaName !== "local" || !changes[STORAGE_KEYS.settings]) return;
+      settings = mergeSettings(changes[STORAGE_KEYS.settings].newValue);
+      applyPageLanguage();
+      renderColorPresets();
+      render();
+    });
   }
 
   function render() {
@@ -59,7 +69,15 @@
     els.apiState.textContent = settings.apiKey && settings.model
       ? (provider ? (provider.labelKey ? t(provider.labelKey, language) : provider.label) : settings.model)
       : t("popup.apiMissing", language);
-    els.toggleHighlights.textContent = settings.hideReminders ? t("popup.showReminders", language) : t("popup.hideReminders", language);
+    const remindersVisible = !settings.hideReminders;
+    els.toggleHighlights.classList.toggle("is-on", remindersVisible);
+    els.toggleHighlights.setAttribute("aria-checked", String(remindersVisible));
+    els.reminderState.textContent = t(remindersVisible ? "popup.remindersVisible" : "popup.remindersHidden", language);
+    els.actionPriority.querySelectorAll("[data-action-priority]").forEach((button) => {
+      const active = button.dataset.actionPriority === settings.selectionActionPriority;
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-pressed", String(active));
+    });
     applyDocumentTheme(settings.highlightColor);
 
     if (!pageUrl) {
@@ -87,6 +105,14 @@
 
   async function toggleHighlights() {
     settings = mergeSettings({ ...settings, hideReminders: !settings.hideReminders });
+    await chrome.storage.local.set({ [STORAGE_KEYS.settings]: settings });
+    render();
+  }
+
+  async function setActionPriority(event) {
+    const button = event.target.closest("[data-action-priority]");
+    if (!button || button.dataset.actionPriority === settings.selectionActionPriority) return;
+    settings = mergeSettings({ ...settings, selectionActionPriority: button.dataset.actionPriority });
     await chrome.storage.local.set({ [STORAGE_KEYS.settings]: settings });
     render();
   }
